@@ -276,6 +276,8 @@ paths:
           $ref: "#/components/responses/Conflict"
         "412":
           $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -319,6 +321,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -816,6 +820,46 @@ components:
                 status: 400
                 detail: "query parameter is not supported: after"
                 instance: /appointments
+            invalidQueryParameter:
+              summary: A query parameter with a value that does not parse
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-query-parameter
+                title: Query parameter is invalid
+                status: 400
+                detail: "query parameter is invalid: state must be BOOKED, CHECKED_IN, COMPLETED, CANCELLED or NO_SHOW"
+                instance: /appointments
+            invalidPathParameter:
+              summary: A path parameter that is not an id of its kind
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-path-parameter
+                title: Path parameter is invalid
+                status: 400
+                detail: "path parameter is invalid: appointmentId: appointment id must be appt-<uuid>"
+                instance: /appointments/nope
+            invalidIfMatch:
+              summary: An If-Match that is not an ETag of this service
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-if-match
+                title: If-Match header is invalid
+                status: 400
+                detail: If-Match must be the ETag of the appointment
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
+            invalidAvailabilityQuery:
+              summary: from and to are required, from < to, at most 14 days
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-availability-query
+                title: Availability query is invalid
+                status: 400
+                detail: availability range must be from < to, at most 14 days, minutes 1..240
+                instance: /doors/WH1-DOCK-IN-01/availability
+            invalidReportRange:
+              summary: from and to are required, from < to, at most 92 days
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-report-range
+                title: Report range is invalid
+                status: 400
+                detail: "report range is invalid: from and to are required, from < to, at most 92 days"
+                instance: /reports/schedule-adherence
     NotFound:
       description: No appointment, door or closure has this id, or the path holds a NUL byte.
       content:
@@ -847,6 +891,14 @@ components:
                 status: 404
                 detail: no such path
                 instance: /nope
+            unknownClosure:
+              summary: No closure has this id (POST /sites/{siteId}/dock-calendar/closures/{closureId}/lifts)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/unknown-closure
+                title: Closure not found
+                status: 404
+                detail: closure not found
+                instance: /sites/WH1/dock-calendar/closures/clo-123e4567-e89b-12d3-a456-426614174001/lifts
     Conflict:
       description: The appointment is in the wrong state for the command, the door is booked in an overlapping window, a closure collides, another request changed the aggregate first, or the Idempotency-Key was already used with a different request (`idempotency-key-reused`).
       content:
@@ -910,6 +962,14 @@ components:
                 status: 409
                 detail: "appointments outside the new hours: appt-123e4567-e89b-12d3-a456-426614174000"
                 instance: /sites/WH1/dock-calendar/operating-hours
+            closureAlreadyLifted:
+              summary: ErrClosureAlreadyLifted
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/closure-already-lifted
+                title: Closure is already lifted
+                status: 409
+                detail: closure is already lifted
+                instance: /sites/WH1/dock-calendar/closures/clo-123e4567-e89b-12d3-a456-426614174001/lifts
             idempotencyKeyReused:
               summary: The Idempotency-Key was used with a different request
               value:
@@ -1009,6 +1069,38 @@ components:
                 status: 422
                 detail: window must not start in the past
                 instance: /appointments
+            invalidReason:
+              summary: ErrInvalidReason (REST accepts CARRIER_REQUEST and SITE_REQUEST only)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-reason
+                title: Cancellation reason is invalid
+                status: 422
+                detail: cancellation reason must be CARRIER_REQUEST, SITE_REQUEST, ASN_CANCELLED or TURNED_AWAY
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
+            invalidEta:
+              summary: ErrInvalidEta
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-eta
+                title: ETA is invalid
+                status: 422
+                detail: eta must be set and its source at most 64 characters
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/eta-reports
+            invalidSettings:
+              summary: ErrInvalidSettings
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-settings
+                title: Calendar settings are invalid
+                status: 422
+                detail: calendar settings out of range
+                instance: /sites/WH1/dock-calendar/settings
+            invalidClosure:
+              summary: ErrInvalidClosure
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-closure
+                title: Closure is invalid
+                status: 422
+                detail: closure needs an id, a door, a span ending after it starts and a reason
+                instance: /sites/WH1/dock-calendar/closures
     PreconditionFailed:
       description: The `If-Match` version is not the current version of the appointment.
       content:

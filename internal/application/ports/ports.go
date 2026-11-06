@@ -138,6 +138,15 @@ type IDGen interface {
 	NewClosureID() string
 }
 
+// AdherenceReader is the read side of the schedule-adherence report (D-13):
+// the analytics projector's adapter implements it. Until that adapter lands
+// the API serves an empty report.
+type AdherenceReader interface {
+	// ScheduleAdherence returns one row per (site, carrier) that has at least
+	// one counted appointment in the range, ordered by site then carrier.
+	ScheduleAdherence(ctx context.Context, q repository.AdherenceQuery) ([]repository.AdherenceRow, error)
+}
+
 // Clock is the service's notion of "now"; the domain never reads a clock.
 type Clock interface {
 	Now() time.Time
