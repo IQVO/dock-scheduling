@@ -1,0 +1,1341 @@
+openapi: 3.0.3
+info:
+  title: Dock Scheduling API
+  version: 1.0.0
+  description: |
+    The WMS-tier owner of **door time** in the warehouse-systems platform (ADR 0001, ADR 0002): every booked window on
+    every dock door, inbound and outbound, from booking through arrival to door release, the no-double-booking rule, door
+    operating hours and closures, ETA-driven risk and no-shows.
+
+    One calendar per door: inbound and outbound appointments share it, and a door whose `dockFlow` is `Both` takes either
+    direction. Windows are half-open, `[windowStart, windowEnd)`; `[10:00, 12:00)` and `[12:00, 14:00)` are compatible.
+    Arrival and door release are physical facts owned by yard-management: this API never records them, the service applies
+    them from yard events (ADR 0003).
+
+    Appointment `state` runs `BOOKED -> CHECKED_IN -> COMPLETED`, or `BOOKED/CHECKED_IN -> CANCELLED`, or
+    `BOOKED -> NO_SHOW`; the last three are terminal. `ETag` is the appointment version; `If-Match` is honoured on the
+    reschedule and cancel sub-resources (412 on mismatch).
+
+    Events are published as CloudEvents on `warehouse.dock-scheduling.events` through a transactional outbox (see
+    `apis/asyncapi.yaml`, ADR 0004). Every `POST` is idempotent: send an `Idempotency-Key`; a replay carries
+    `Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
+    RFC 7807 problem documents with `type = https://errors.dock-scheduling.warehouse-systems.dev/<slug>`. There is no
+    authentication layer (fleet decision 2026-09-11).
+  contact:
+    name: dock-scheduling maintainers
+    url: https://github.com/IQVO/dock-scheduling
+  license:
+    name: UNLICENSED
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: http://localhost:8000/api/dock-scheduling
+    description: Local kind cluster through Kong
+tags:
+  - name: Appointments
+    description: Book, reschedule, cancel and report ETAs for door windows.
+  - name: Doors
+    description: Free windows per door.
+  - name: Dock calendar
+    description: Per-site operating hours, closures and booking settings.
+  - name: Sweeps
+    description: The scheduled no-show sweep.
+  - name: Reports
+    description: Schedule adherence from the analytics read side.
+  - name: Health
+    description: Liveness, readiness and metrics probes.
+
+paths:
+  /appointments:
+    post:
+      operationId: bookAppointment
+      summary: Book an appointment
+      description: |
+        Books a window on a door. The door must be a known Dock slot of a site whose `dockFlow` allows the direction; the
+        window must not start in the past, last at most the site's maximum (4 h) and start and end on the site's slot granularity, lie inside the door's operating hours and
+        outside its closures, and not overlap another `BOOKED` or `CHECKED_IN` appointment of the door. INBOUND covers at
+        least one known, not cancelled ASN that sits on no other active appointment (409 `asn-already-scheduled`); OUTBOUND names a known `cptId` or at least one shipment reference. Requires an
+        `Idempotency-Key`. Publishes `DockAppointmentBooked`. The answer carries the `Location` of the new appointment and
+        its `ETag`.
+      tags: [Appointments]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookAppointmentRequest"
+            example:
+              direction: INBOUND
+              doorCode: WH1-DOCK-IN-01
+              carrier: ACME Freight
+              carrierScac: ACMF
+              windowStart: "2026-11-06T08:00:00Z"
+              windowEnd: "2026-11-06T10:00:00Z"
+              asnNumbers: [ASN-1001]
+              expectedSealNumber: SEAL-77120
+      responses:
+        "201":
+          description: The appointment is booked.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            Location:
+              $ref: "#/components/headers/Location"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: listAppointments
+      summary: List appointments
+      description: |
+        Lists appointments ordered by window start then id, one page at a time (`limit`, `cursor`; keyset). An empty result
+        is `200` with `{"items": []}`. All filters are optional and must be repeated on every page request. `from` and `to`
+        select appointments whose window overlaps `[from, to)`.
+      tags: [Appointments]
+      parameters:
+        - name: siteId
+          in: query
+          required: false
+          description: Narrow to one site (facility-layout `siteCode`).
+          schema: { type: string }
+        - name: doorCode
+          in: query
+          required: false
+          description: Narrow to one door.
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          description: Narrow to one state.
+          schema: { $ref: "#/components/schemas/AppointmentState" }
+        - name: direction
+          in: query
+          required: false
+          description: Narrow to one direction.
+          schema: { $ref: "#/components/schemas/Direction" }
+        - name: carrierScac
+          in: query
+          required: false
+          description: Narrow to one carrier SCAC.
+          schema: { type: string }
+        - name: atRisk
+          in: query
+          required: false
+          description: "`true` narrows to appointments flagged at risk."
+          schema: { type: boolean }
+        - name: from
+          in: query
+          required: false
+          description: RFC 3339 start of the overlap range (inclusive).
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          description: RFC 3339 end of the overlap range (exclusive).
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of appointments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /appointments/{appointmentId}:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    get:
+      operationId: getAppointment
+      summary: Get an appointment
+      description: Returns one appointment with its `ETag` (the version).
+      tags: [Appointments]
+      responses:
+        "200":
+          description: The appointment.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /appointments/{appointmentId}/reschedules:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    post:
+      operationId: rescheduleAppointment
+      summary: Reschedule a BOOKED appointment
+      description: |
+        Moves the window of a `BOOKED` appointment and optionally its door (`doorCode`). The new door and window are checked like a
+        booking, ignoring the appointment's own current window. Requires an `Idempotency-Key`;
+        `If-Match` with the `ETag` is honoured (412 on mismatch). Publishes `DockAppointmentRescheduled`.
+      tags: [Appointments]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RescheduleRequest"
+            example:
+              doorCode: WH1-DOCK-IN-02
+              windowStart: "2026-11-06T09:00:00Z"
+              windowEnd: "2026-11-06T11:00:00Z"
+      responses:
+        "200":
+          description: The appointment is rescheduled.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /appointments/{appointmentId}/cancellations:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    post:
+      operationId: cancelAppointment
+      summary: Cancel an appointment
+      description: |
+        Cancels a `BOOKED` or `CHECKED_IN` appointment and frees its door window. `reason` is `CARRIER_REQUEST` or
+        `SITE_REQUEST` (the dock planner); `TURNED_AWAY` (gate refusal) and `ASN_CANCELLED` (every ASN cancelled) are set only by
+        the service. Requires an `Idempotency-Key`; `If-Match` is honoured. Publishes `DockAppointmentCancelled`.
+      tags: [Appointments]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRequest"
+            example:
+              reason: CARRIER_REQUEST
+      responses:
+        "200":
+          description: The appointment is cancelled.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /appointments/{appointmentId}/eta-reports:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    post:
+      operationId: reportEta
+      summary: Report an ETA
+      description: |
+        Records the carrier's latest estimated arrival on a `BOOKED` appointment. An `etaAt` later than `windowStart` plus the
+        site's arrival tolerance raises the advisory `DockAppointmentAtRisk` (analytics stream) once per report; nothing is
+        rescheduled automatically. Requires an `Idempotency-Key`.
+      tags: [Appointments]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EtaReportRequest"
+            example:
+              etaAt: "2026-11-06T09:10:00Z"
+              source: carrier-portal
+      responses:
+        "201":
+          description: The ETA is recorded.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EtaReportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /doors/{doorCode}/availability:
+    parameters:
+      - $ref: "#/components/parameters/DoorCode"
+    get:
+      operationId: getDoorAvailability
+      summary: Free windows of a door
+      description: |
+        Answers the free windows of one door inside `[from, to)` (at most 14 days): the door's operating hours minus its
+        closures minus its `BOOKED` and `CHECKED_IN` appointments, cut on the site's slot granularity, optionally only
+        windows at least `minutes` long. A composite view, not a collection: it is not paged.
+      tags: [Doors]
+      x-pagination-exempt: view
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: RFC 3339 start of the range.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          description: RFC 3339 end of the range, after `from`, at most 14 days later.
+          schema: { type: string, format: date-time }
+        - name: minutes
+          in: query
+          required: false
+          description: Only return free windows at least this long (default the slot granularity).
+          schema: { type: integer, minimum: 1, maximum: 240 }
+      responses:
+        "200":
+          description: The free windows and the busy spans of the door.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DoorAvailability"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sites/{siteId}/dock-calendar:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: getDockCalendar
+      summary: Get a site's dock calendar
+      description: |
+        Returns the operating hours, the closures and the settings of a site, with defaults applied (24x7 hours when none
+        are declared; max window 240, granularity 15, arrival tolerance 15, no-show grace 60). A site that never declared
+        anything answers the defaults at version 0. A composite view: not paged.
+      tags: [Dock calendar]
+      x-pagination-exempt: view
+      responses:
+        "200":
+          description: The dock calendar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockCalendar"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sites/{siteId}/dock-calendar/operating-hours:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    put:
+      operationId: declareOperatingHours
+      summary: Declare the operating hours of a site
+      description: |
+        Replaces the whole set of operating-hours rows of the site. A door with rows of its own uses only those; a door
+        without rows uses the rows whose `doorCode` is null; no rows at all means 24x7. Refused with 409 `hours-conflict-with-appointments` (listing the ids) when an active appointment would fall outside the new hours. Idempotent by method. Publishes
+        `DoorOperatingHoursDeclared` (analytics stream).
+      tags: [Dock calendar]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatingHoursRequest"
+            example:
+              operatingHours:
+                - { weekday: MON, opensAt: "06:00", closesAt: "22:00", timezone: America/Sao_Paulo }
+                - { doorCode: WH1-DOCK-IN-01, weekday: MON, opensAt: "08:00", closesAt: "16:00", timezone: America/Sao_Paulo }
+      responses:
+        "200":
+          description: The operating hours are declared.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockCalendar"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sites/{siteId}/dock-calendar/settings:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    put:
+      operationId: declareCalendarSettings
+      summary: Declare the booking settings of a site
+      description: |
+        Sets `maxWindowMinutes` (1..240), `slotGranularityMinutes` (1..240), `arrivalToleranceMinutes` (0..240) and
+        `noShowGraceMinutes` (0..1440). Idempotent by method.
+      tags: [Dock calendar]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+            example:
+              maxWindowMinutes: 240
+              slotGranularityMinutes: 15
+              arrivalToleranceMinutes: 15
+              noShowGraceMinutes: 60
+      responses:
+        "200":
+          description: The settings are declared.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockCalendar"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sites/{siteId}/dock-calendar/closures:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    post:
+      operationId: scheduleDoorClosure
+      summary: Schedule a door closure
+      description: |
+        Closes one door for `[from, to)`. Closures of one door may not overlap (409 `overlapping-closure`) and a closure may
+        not cover an active appointment of the door (409 `closure-conflicts-with-appointments`, listing the appointment
+        ids). Requires an `Idempotency-Key`. Publishes `DoorClosureScheduled`.
+      tags: [Dock calendar]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleClosureRequest"
+            example:
+              doorCode: WH1-DOCK-IN-01
+              from: "2026-11-10T00:00:00Z"
+              to: "2026-11-11T00:00:00Z"
+              reason: Leveller maintenance
+      responses:
+        "201":
+          description: The closure is scheduled.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Closure"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /sites/{siteId}/dock-calendar/closures/{closureId}/lifts:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ClosureId"
+    post:
+      operationId: liftDoorClosure
+      summary: Lift a door closure
+      description: |
+        Lifts a scheduled closure so the door can be booked again in its span. Lifting an already lifted closure answers
+        409 `closure-already-lifted`. Requires an `Idempotency-Key`. Publishes `DoorClosureLifted`.
+      tags: [Dock calendar]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The closure is lifted.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Closure"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /no-show-sweeps:
+    post:
+      operationId: runNoShowSweep
+      summary: Run the no-show sweep
+      description: |
+        Marks every `BOOKED` appointment whose `windowEnd` plus the site's no-show grace has passed as `NO_SHOW`, each in its
+        own transaction, and answers the ids it marked. Naturally idempotent (a second run marks nothing new); driven by a
+        CronJob. Requires an `Idempotency-Key` like every POST. Publishes `DockAppointmentNoShow` per appointment.
+      tags: [Sweeps]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The sweep ran.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SweepResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reports/schedule-adherence:
+    get:
+      operationId: getScheduleAdherence
+      summary: Schedule adherence report
+      description: |
+        On-time, early, late and no-show counts and shares per site and carrier over `[from, to)`, folded from this
+        service's analytics topic (ADR 0006). Served by the reports binary. Mandatory range of at most 92 days.
+      tags: [Reports]
+      parameters:
+        - name: siteId
+          in: query
+          required: false
+          description: Narrow to one site.
+          schema: { type: string }
+        - name: carrierScac
+          in: query
+          required: false
+          description: Narrow to one carrier.
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          description: RFC 3339 start of the range (inclusive).
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          description: RFC 3339 end of the range (exclusive).
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleAdherenceReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Liveness probe
+      description: 200 while the process is running.
+      tags: [Health]
+      responses:
+        "200":
+          description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+
+  /readyz:
+    get:
+      operationId: readyz
+      summary: Readiness probe
+      description: |
+        200 when the service can serve traffic. 503 while draining for shutdown (`{"status":"not_ready"}`) or while Postgres
+        or the Kafka broker is unreachable (problem `dependency-unavailable`). Kafka readiness is reachability only (a broker
+        answers a metadata request); a missing topic never makes the service unready.
+      tags: [Health]
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "503":
+          description: Not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/dependency-unavailable
+                title: A runtime dependency is unavailable
+                status: 503
+                detail: "not ready: kafka"
+                instance: /readyz
+
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Prometheus metrics
+      description: The Prometheus scrape endpoint (text exposition format).
+      tags: [Health]
+      responses:
+        "200":
+          description: The metrics of the process.
+          content:
+            text/plain; version=0.0.4; charset=utf-8:
+              schema:
+                type: string
+
+components:
+  parameters:
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      description: The appointment id (`appt-` followed by a lowercase UUID).
+      schema:
+        type: string
+        pattern: "^appt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      example: appt-123e4567-e89b-12d3-a456-426614174000
+    DoorCode:
+      name: doorCode
+      in: path
+      required: true
+      description: The facility-layout location code of the door (1..64 characters, no whitespace, control characters or `/`).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+      example: WH1-DOCK-IN-01
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      description: The facility-layout `siteCode`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+      example: WH1
+    ClosureId:
+      name: closureId
+      in: path
+      required: true
+      description: The closure id (`clo-` followed by a lowercase UUID).
+      schema:
+        type: string
+        pattern: "^clo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      example: clo-123e4567-e89b-12d3-a456-426614174001
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Caller-generated unique key (a UUID per logical submit; a retry reuses it) that makes a retried request safe.
+        Required on every POST; answered with 400 `idempotency-key-required` when absent and 400
+        `idempotency-key-invalid` when it is longer than 128 characters or not printable ASCII. A replay with the same key
+        and the same request (method, path and body) returns the stored response with `Idempotency-Replayed: true`; the
+        same key with a different request is a 409 `idempotency-key-reused`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: The appointment `ETag` the caller last saw; a different current version answers 412 `precondition-failed`.
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size, 1 to 500 (default 100); anything else is 400 `invalid-limit`. A query parameter the collection does not declare is 400 `unknown-query-parameter`.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque page token, copied from the previous page's `nextCursor`; absent for the first page. A value that does not decode is 400 `invalid-cursor`. Repeat the filters on every page request.
+      schema:
+        type: string
+
+  headers:
+    IdempotencyReplayed:
+      description: >-
+        `true` when this response is the stored answer of an earlier request with the same `Idempotency-Key` and the same
+        method, path and body (the handler did not run again). Absent on the first execution.
+      schema:
+        type: string
+        enum: ["true"]
+    Location:
+      description: The URL of the created resource.
+      schema:
+        type: string
+    ETag:
+      description: The weak entity tag of the appointment, `W/"<version>"`.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Malformed JSON body, an unknown field, an invalid path, query or header parameter, or a NUL byte in a body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            malformedBody:
+              summary: Malformed JSON body or NUL byte
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/malformed-request-body
+                title: Malformed request body
+                status: 400
+                detail: request body is not valid JSON for this operation
+                instance: /appointments
+            idempotencyKeyRequired:
+              summary: Missing Idempotency-Key
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/idempotency-key-required
+                title: Idempotency-Key header is required
+                status: 400
+                detail: send an Idempotency-Key header with a unique value per logical request
+                instance: /appointments
+            idempotencyKeyInvalid:
+              summary: Idempotency-Key longer than 128 characters or not printable ASCII
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/idempotency-key-invalid
+                title: Idempotency-Key header is invalid
+                status: 400
+                detail: the Idempotency-Key header must be 1 to 128 printable ASCII characters
+                instance: /appointments
+            invalidLimit:
+              summary: limit outside 1 to 500
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-limit
+                title: Limit is invalid
+                status: 400
+                detail: limit must be an integer between 1 and 500
+                instance: /appointments
+            invalidCursor:
+              summary: cursor is not a page token
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-cursor
+                title: Cursor is invalid
+                status: 400
+                detail: cursor is not a valid page token
+                instance: /appointments
+            unknownQueryParameter:
+              summary: A query parameter the collection does not declare
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/unknown-query-parameter
+                title: Query parameter is not supported
+                status: 400
+                detail: "query parameter is not supported: after"
+                instance: /appointments
+    NotFound:
+      description: No appointment, door or closure has this id, or the path holds a NUL byte.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            appointmentNotFound:
+              summary: No appointment has this id
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/appointment-not-found
+                title: Appointment not found
+                status: 404
+                detail: appointment not found
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000
+            doorNotFound:
+              summary: Not a known Dock slot (GET /doors/{doorCode}/availability)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/door-not-found
+                title: Door not found
+                status: 404
+                detail: door is not a known dock slot
+                instance: /doors/NOPE/availability
+            notFound:
+              summary: Malformed path (including a NUL byte)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/not-found
+                title: Not found
+                status: 404
+                detail: no such path
+                instance: /nope
+    Conflict:
+      description: The appointment is in the wrong state for the command, the door is booked in an overlapping window, a closure collides, another request changed the aggregate first, or the Idempotency-Key was already used with a different request (`idempotency-key-reused`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            doorDoubleBooked:
+              summary: ErrDoorDoubleBooked
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/door-double-booked
+                title: Door is already booked in an overlapping window
+                status: 409
+                detail: door WH1-DOCK-IN-01 is already booked in an overlapping window
+                instance: /appointments
+            appointmentNotBooked:
+              summary: ErrIllegalTransition
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/illegal-transition
+                title: The command is not legal in the current state
+                status: 409
+                detail: only a BOOKED appointment can be rescheduled
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/reschedules
+            overlappingClosure:
+              summary: ErrOverlappingClosure
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/overlapping-closure
+                title: Closure overlaps another closure of the door
+                status: 409
+                detail: the door already has a closure in an overlapping span
+                instance: /sites/WH1/dock-calendar/closures
+            closureConflicts:
+              summary: ErrClosureConflictsWithAppointments
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/closure-conflicts-with-appointments
+                title: Closure covers active appointments
+                status: 409
+                detail: "closure covers active appointments: appt-123e4567-e89b-12d3-a456-426614174000"
+                instance: /sites/WH1/dock-calendar/closures
+            doorUnavailable:
+              summary: ErrDoorUnavailable
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/door-unavailable
+                title: The door is closed in this window
+                status: 409
+                detail: the window is outside the door's operating hours or inside a closure
+                instance: /appointments
+            asnAlreadyScheduled:
+              summary: ErrAsnAlreadyScheduled
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/asn-already-scheduled
+                title: An ASN is already on an active appointment
+                status: 409
+                detail: "asn ASN-1001 is already scheduled on appt-123e4567-e89b-12d3-a456-426614174000"
+                instance: /appointments
+            hoursConflict:
+              summary: ErrHoursConflictWithAppointments
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/hours-conflict-with-appointments
+                title: Operating hours would strand active appointments
+                status: 409
+                detail: "appointments outside the new hours: appt-123e4567-e89b-12d3-a456-426614174000"
+                instance: /sites/WH1/dock-calendar/operating-hours
+            idempotencyKeyReused:
+              summary: The Idempotency-Key was used with a different request
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/idempotency-key-reused
+                title: Idempotency-Key was already used with a different request
+                status: 409
+                detail: the Idempotency-Key was used with a different request (method, path or body)
+                instance: /appointments
+            concurrentModification:
+              summary: ErrConcurrentUpdate
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/concurrent-update
+                title: The appointment was modified by another request; re-fetch the latest version and retry
+                status: 409
+                detail: re-fetch the appointment and retry the command
+                instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
+    Unprocessable:
+      description: The request is well formed JSON but a value-object or reference rule refuses it (invalid door code, carrier or window, window in the past, unknown door, door flow mismatch, unknown ASN, missing outbound reference, invalid operating hours or settings).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalidDoorCode:
+              summary: ErrInvalidDoorCode
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-door-code
+                title: Door code is invalid
+                status: 422
+                detail: door code must be 1..64 characters without whitespace, control characters or '/'
+                instance: /appointments
+
+            invalidCarrier:
+              summary: ErrInvalidCarrier
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-carrier
+                title: Carrier is invalid
+                status: 422
+                detail: carrier must be 1..100 non-blank characters and the scac 2..4 upper-case letters
+                instance: /appointments
+
+            invalidWindow:
+              summary: ErrInvalidWindow
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-window
+                title: Window is invalid
+                status: 422
+                detail: window must end after it starts and last at most the site maximum
+                instance: /appointments
+
+            missingOutboundRef:
+              summary: ErrMissingOutboundRef
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/missing-outbound-ref
+                title: Outbound appointment names no cutoff or shipment
+                status: 422
+                detail: an OUTBOUND appointment needs a known cptId or at least one shipmentRef
+                instance: /appointments
+
+            invalidOperatingHours:
+              summary: ErrInvalidOperatingHours
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-operating-hours
+                title: Operating hours are invalid
+                status: 422
+                detail: opensAt must be before closesAt for every row
+                instance: /sites/WH1/dock-calendar/operating-hours
+            unknownDoor:
+              summary: ErrUnknownDoor
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/unknown-door
+                title: Door is not a known dock slot
+                status: 422
+                detail: door NOPE is not a known active dock slot
+                instance: /appointments
+            doorFlowMismatch:
+              summary: ErrDoorFlowMismatch
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/door-flow-mismatch
+                title: The door does not take this direction
+                status: 422
+                detail: door WH1-DOCK-IN-01 takes Inbound only
+                instance: /appointments
+            unknownAsn:
+              summary: ErrUnknownAsn
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/unknown-asn
+                title: An ASN is unknown or cancelled
+                status: 422
+                detail: "unknown or cancelled asn: ASN-9"
+                instance: /appointments
+            windowInPast:
+              summary: ErrWindowInPast
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/window-in-past
+                title: Window starts in the past
+                status: 422
+                detail: window must not start in the past
+                instance: /appointments
+    PreconditionFailed:
+      description: The `If-Match` version is not the current version of the appointment.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.dock-scheduling.warehouse-systems.dev/precondition-failed
+            title: Precondition failed
+            status: 412
+            detail: the appointment is at version 3, If-Match names another
+            instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.dock-scheduling.warehouse-systems.dev/internal-error
+            title: Internal server error
+            status: 500
+            detail: an unexpected error occurred
+            instance: /appointments
+
+  schemas:
+    Direction:
+      type: string
+      enum: [INBOUND, OUTBOUND]
+    AppointmentState:
+      type: string
+      description: "`BOOKED -> CHECKED_IN -> COMPLETED`, `BOOKED/CHECKED_IN -> CANCELLED`, `BOOKED -> NO_SHOW`; the last three are terminal."
+      enum: [BOOKED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW]
+    ArrivalStatus:
+      type: string
+      enum: [EARLY, ON_TIME, LATE]
+    Weekday:
+      type: string
+      enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+
+    BookAppointmentRequest:
+      type: object
+      required: [direction, doorCode, carrier, windowStart, windowEnd]
+      additionalProperties: false
+      properties:
+        direction: { $ref: "#/components/schemas/Direction" }
+        doorCode: { type: string, minLength: 1, maxLength: 64 }
+        carrier: { type: string, minLength: 1, maxLength: 100 }
+        carrierScac: { type: string, nullable: true, pattern: "^[A-Z]{2,4}$" }
+        windowStart: { type: string, format: date-time }
+        windowEnd: { type: string, format: date-time }
+        asnNumbers:
+          type: array
+          description: INBOUND only; at least one, distinct.
+          items: { type: string }
+        cptId:
+          type: string
+          nullable: true
+          description: OUTBOUND only; a cutoff id of the site's CPT schedule.
+        shipmentRefs:
+          type: array
+          description: OUTBOUND only.
+          items: { type: string }
+        expectedSealNumber:
+          type: string
+          nullable: true
+          description: The seal the carrier declares when booking.
+    RescheduleRequest:
+      type: object
+      required: [windowStart, windowEnd]
+      additionalProperties: false
+      properties:
+        doorCode:
+          type: string
+          nullable: true
+          description: The new door; omitted or null keeps the current door.
+        windowStart: { type: string, format: date-time }
+        windowEnd: { type: string, format: date-time }
+    CancelRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: "`TURNED_AWAY` and `ASN_CANCELLED` are set by the service only."
+          enum: [CARRIER_REQUEST, SITE_REQUEST]
+    EtaReportRequest:
+      type: object
+      required: [etaAt]
+      additionalProperties: false
+      properties:
+        etaAt: { type: string, format: date-time }
+        source:
+          type: string
+          maxLength: 64
+          description: Who reported it (default `api`).
+    Eta:
+      type: object
+      required: [etaAt, reportedAt, source]
+      properties:
+        etaAt: { type: string, format: date-time }
+        reportedAt: { type: string, format: date-time }
+        source: { type: string }
+    Arrival:
+      type: object
+      required: [checkedInAt, status, implicit]
+      properties:
+        checkedInAt: { type: string, format: date-time, nullable: true }
+        status: { $ref: "#/components/schemas/ArrivalStatus" }
+        visitId: { type: string, nullable: true }
+        implicit:
+          type: boolean
+          description: True when the arrival is implied by a door release that came before any gate fact.
+    Appointment:
+      type: object
+      required: [appointmentId, siteId, direction, doorCode, carrier, windowStart, windowEnd, state, provenance, version, atRisk]
+      properties:
+        appointmentId: { type: string }
+        siteId: { type: string }
+        direction: { $ref: "#/components/schemas/Direction" }
+        doorCode: { type: string }
+        carrier: { type: string }
+        carrierScac: { type: string, nullable: true }
+        windowStart: { type: string, format: date-time }
+        windowEnd: { type: string, format: date-time }
+        asnNumbers: { type: array, items: { type: string } }
+        cptId: { type: string, nullable: true }
+        shipmentRefs: { type: array, items: { type: string } }
+        expectedSealNumber: { type: string, nullable: true }
+        provenance: { type: string, enum: [native, legacy-import] }
+        state: { $ref: "#/components/schemas/AppointmentState" }
+        version: { type: integer, format: int64, minimum: 1 }
+        eta: { type: object, nullable: true, allOf: [{ $ref: "#/components/schemas/Eta" }] }
+        arrival: { type: object, nullable: true, allOf: [{ $ref: "#/components/schemas/Arrival" }] }
+        atRisk:
+          type: boolean
+          description: True after a late ETA or a door reassignment that overlaps this window; cleared by an on-time ETA or a reschedule.
+        atRiskCause:
+          type: string
+          nullable: true
+          enum: [LATE_ETA, DOOR_REASSIGNED_OVERLAP]
+        completedAt: { type: string, format: date-time, nullable: true }
+        cancellationReason: { type: string, nullable: true, enum: [CARRIER_REQUEST, SITE_REQUEST, ASN_CANCELLED, TURNED_AWAY] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      example:
+        appointmentId: appt-123e4567-e89b-12d3-a456-426614174000
+        siteId: WH1
+        direction: INBOUND
+        doorCode: WH1-DOCK-IN-01
+        carrier: ACME Freight
+        carrierScac: ACMF
+        windowStart: "2026-11-06T08:00:00Z"
+        windowEnd: "2026-11-06T10:00:00Z"
+        asnNumbers: [ASN-1001]
+        cptId: null
+        shipmentRefs: []
+        expectedSealNumber: SEAL-77120
+        provenance: native
+        state: BOOKED
+        version: 1
+        atRisk: false
+        completedAt: null
+        createdAt: "2026-11-05T12:00:00Z"
+        updatedAt: "2026-11-05T12:00:00Z"
+    AppointmentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Appointment" }
+        nextCursor: { type: string, nullable: true }
+    EtaReportResult:
+      type: object
+      required: [appointment, atRisk]
+      properties:
+        appointment: { $ref: "#/components/schemas/Appointment" }
+        atRisk:
+          type: boolean
+          description: True when the ETA is later than the window start plus the arrival tolerance (DockAppointmentAtRisk raised).
+
+    TimeSpan:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+    BusySpan:
+      type: object
+      required: [start, end, kind]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        kind: { type: string, enum: [APPOINTMENT, CLOSURE, OUT_OF_HOURS] }
+        ref:
+          type: string
+          nullable: true
+          description: The appointment or closure id.
+    DoorAvailability:
+      type: object
+      required: [doorCode, siteId, from, to, granularityMinutes, freeWindows, busy]
+      properties:
+        doorCode: { type: string }
+        siteId: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        granularityMinutes: { type: integer }
+        freeWindows:
+          type: array
+          items: { $ref: "#/components/schemas/TimeSpan" }
+        busy:
+          type: array
+          items: { $ref: "#/components/schemas/BusySpan" }
+
+    OperatingHoursRow:
+      type: object
+      required: [weekday, opensAt, closesAt, timezone]
+      additionalProperties: false
+      properties:
+        doorCode:
+          type: string
+          nullable: true
+          description: The door the row applies to; null is the site default.
+        weekday: { $ref: "#/components/schemas/Weekday" }
+        opensAt: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
+        closesAt:
+          type: string
+          pattern: "^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$"
+        timezone: { type: string, description: "IANA zone, e.g. America/Sao_Paulo." }
+    OperatingHoursRequest:
+      type: object
+      required: [operatingHours]
+      additionalProperties: false
+      properties:
+        operatingHours:
+          type: array
+          items: { $ref: "#/components/schemas/OperatingHoursRow" }
+    Settings:
+      type: object
+      required: [maxWindowMinutes, slotGranularityMinutes, arrivalToleranceMinutes, noShowGraceMinutes]
+      additionalProperties: false
+      properties:
+        maxWindowMinutes: { type: integer, minimum: 1, maximum: 240 }
+        slotGranularityMinutes: { type: integer, minimum: 1, maximum: 240 }
+        arrivalToleranceMinutes: { type: integer, minimum: 0, maximum: 240 }
+        noShowGraceMinutes: { type: integer, minimum: 0, maximum: 1440 }
+    ScheduleClosureRequest:
+      type: object
+      required: [doorCode, from, to, reason]
+      additionalProperties: false
+      properties:
+        doorCode: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        reason: { type: string, minLength: 1, maxLength: 200 }
+    Closure:
+      type: object
+      required: [closureId, siteId, doorCode, from, to, reason, lifted]
+      properties:
+        closureId: { type: string }
+        siteId: { type: string }
+        doorCode: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        reason: { type: string }
+        lifted: { type: boolean }
+    DockCalendar:
+      type: object
+      required: [siteId, version, settings, operatingHours, closures]
+      properties:
+        siteId: { type: string }
+        version: { type: integer, format: int64, minimum: 0 }
+        settings: { $ref: "#/components/schemas/Settings" }
+        operatingHours:
+          type: array
+          items: { $ref: "#/components/schemas/OperatingHoursRow" }
+        closures:
+          type: array
+          description: Scheduled (not lifted) closures.
+          items: { $ref: "#/components/schemas/Closure" }
+
+    SweepResult:
+      type: object
+      required: [count, appointmentIds, ranAt]
+      properties:
+        count: { type: integer }
+        appointmentIds: { type: array, items: { type: string } }
+        ranAt: { type: string, format: date-time }
+    AdherenceRow:
+      type: object
+      required: [siteId, carrierScac, onTime, early, late, noShow, total]
+      properties:
+        siteId: { type: string }
+        carrierScac: { type: string, description: "`-` when the appointment had no SCAC." }
+        onTime: { type: integer }
+        early: { type: integer }
+        late: { type: integer }
+        noShow: { type: integer }
+        total: { type: integer }
+        onTimeShare: { type: number }
+        earlyShare: { type: number }
+        lateShare: { type: number }
+        noShowShare: { type: number }
+    ScheduleAdherenceReport:
+      type: object
+      required: [from, to, items]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdherenceRow" }
+
+    Problem:
+      type: object
+      description: RFC 7807 problem document used for every non-2xx response.
+      required: [type, title, status, detail, instance]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, format: int32 }
+        detail: { type: string }
+        instance: { type: string }
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }

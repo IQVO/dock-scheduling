@@ -249,12 +249,6 @@ jobs:
         run: |
           echo "### go mod tidy -diff" >> "$GITHUB_STEP_SUMMARY"
           go mod tidy -diff | tee -a "$GITHUB_STEP_SUMMARY" || true
-      - name: Unused frontend exports/files/deps (knip)
-        working-directory: web
-        run: |
-          npm ci
-          echo "### knip (web/)" >> "$GITHUB_STEP_SUMMARY"
-          npx knip --no-exit-code | tee -a "$GITHUB_STEP_SUMMARY" || true
       - name: Coverage quality — high-coverage functions with a surviving mutant
         run: |
           go test ./internal/domain/... -coverprofile=/tmp/cov.out -covermode=atomic
