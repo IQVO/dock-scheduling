@@ -126,6 +126,34 @@ func newDatabase(t *testing.T, template string) string {
 	return url
 }
 
+// AsRole creates a LOGIN role with the given privileges on the database at
+// databaseURL and returns that database's DSN for the role: how the tests prove
+// a role is as limited as the deployment's (grants is the SQL after "GRANT" to
+// run for the role, e.g. "SELECT ON ALL TABLES IN SCHEMA public").
+func AsRole(t *testing.T, databaseURL, role string, grants ...string) string {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect as the owner: %v", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	stmts := []string{fmt.Sprintf(`CREATE ROLE %s LOGIN PASSWORD '%s'`, role, role)}
+	for _, g := range grants {
+		stmts = append(stmts, fmt.Sprintf(`GRANT %s TO %s`, g, role))
+	}
+	for _, stmt := range stmts {
+		if _, err := conn.Exec(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	cfg, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		t.Fatalf("parse %s: %v", databaseURL, err)
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", role, role, cfg.Host, cfg.Port, cfg.Database)
+}
+
 // NewPool returns a pool on a fresh database (migrations applied), closed
 // when the test ends.
 func NewPool(t *testing.T) *pgxpool.Pool {

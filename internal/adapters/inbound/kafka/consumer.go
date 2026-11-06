@@ -13,6 +13,7 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/claudioed/dock-scheduling/internal/adapters/kafka/cloudevents"
+	"github.com/claudioed/dock-scheduling/internal/analytics/adherence"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
 )
@@ -169,6 +170,8 @@ var deterministicErrors = []error{
 	dockappointment.ErrInvalidAppointmentID, dockappointment.ErrInvalidWindow, dockappointment.ErrDuplicateAsn,
 	dockappointment.ErrInvalidRefs, dockappointment.ErrInvalidReason, dockappointment.ErrDoorDoubleBooked,
 	dockappointment.ErrAsnAlreadyScheduled,
+	// The analytics projection's refusals (ADR 0006).
+	adherence.ErrInvalidEvent, adherence.ErrRejected,
 }
 
 // isDeterministic reports whether err is a refusal that retrying cannot fix.

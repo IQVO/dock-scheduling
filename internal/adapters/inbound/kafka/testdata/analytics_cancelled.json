@@ -1,0 +1,17 @@
+{
+  "specversion": "1.0",
+  "id": "2b1a0f9e-8d7c-4b6a-a594-837261504f3e",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled",
+  "subject": "appt-123e4567-e89b-12d3-a456-426614174000",
+  "time": "2026-11-05T14:20:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:DockAppointmentCancelled:v1",
+  "data": {
+    "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000",
+    "site_id": "WH1",
+    "door_code": "WH1-DOCK-IN-01",
+    "reason": "CARRIER_REQUEST",
+    "version": 2
+  }
+}

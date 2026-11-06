@@ -139,12 +139,19 @@ type IDGen interface {
 }
 
 // AdherenceReader is the read side of the schedule-adherence report (D-13):
-// the analytics projector's adapter implements it. Until that adapter lands
-// the API serves an empty report.
+// the analytics store's reader implements it (ADR 0006), and cmd/reports serves
+// it.
 type AdherenceReader interface {
 	// ScheduleAdherence returns one row per (site, carrier) that has at least
 	// one counted appointment in the range, ordered by site then carrier.
 	ScheduleAdherence(ctx context.Context, q repository.AdherenceQuery) ([]repository.AdherenceRow, error)
+}
+
+// FreshnessReader tells how far the analytics projection has got.
+type FreshnessReader interface {
+	// Freshness returns the CloudEvents time of the newest event the projection
+	// applied, or nil before the first one.
+	Freshness(ctx context.Context) (*time.Time, error)
 }
 
 // Clock is the service's notion of "now"; the domain never reads a clock.
