@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/claudioed/dock-scheduling/internal/adapters/outbound/postgres"
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
@@ -127,7 +129,11 @@ func TestARefusedSaveDoesNotPoisonTheUnitOfWork(t *testing.T) {
 func TestExclusionConstraintBackstopsConcurrentBookings(t *testing.T) {
 	pool := pgtest.NewPool(t)
 	repo, uow := postgres.NewAppointmentRepo(pool), postgres.NewUnitOfWork(pool)
-	const workers = 8
+	// Few workers on purpose: with no advisory lock, overlapping gist
+	// exclusion inserts deadlock each other and Postgres resolves one victim
+	// per deadlock_timeout (1s), so many workers outlast the 5s statement
+	// timeout. The race is what is proven, not the throughput.
+	const workers = 3
 	results := make(chan error, workers)
 	var wg sync.WaitGroup
 	for i := 1; i <= workers; i++ {
@@ -140,19 +146,26 @@ func TestExclusionConstraintBackstopsConcurrentBookings(t *testing.T) {
 	}
 	wg.Wait()
 	close(results)
-	wins, doubleBooked := 0, 0
+	// Without the lock, Postgres may also pick a deadlock victim among the
+	// overlapping inserters (SQLSTATE 40P01): that loser booked nothing too.
+	// The production path never gets here: the use cases take LockDoor first.
+	wins, losers := 0, 0
 	for err := range results {
+		var pgErr *pgconn.PgError
 		switch {
 		case err == nil:
 			wins++
-		case errors.Is(err, dockappointment.ErrDoorDoubleBooked):
-			doubleBooked++
+		case errors.Is(err, dockappointment.ErrDoorDoubleBooked), errors.As(err, &pgErr) && pgErr.Code == "40P01":
+			losers++
 		default:
 			t.Fatalf("unexpected error: %v", err)
 		}
 	}
-	if wins != 1 || doubleBooked != workers-1 {
-		t.Fatalf("wins=%d doubleBooked=%d, want 1 and %d", wins, doubleBooked, workers-1)
+	if wins != 1 || losers != workers-1 {
+		t.Fatalf("wins=%d losers=%d, want 1 and %d", wins, losers, workers-1)
+	}
+	if n := pgtest.Count(t, pool, "dock_appointments"); n != 1 {
+		t.Fatalf("dock_appointments = %d, want exactly the winner", n)
 	}
 }
 
