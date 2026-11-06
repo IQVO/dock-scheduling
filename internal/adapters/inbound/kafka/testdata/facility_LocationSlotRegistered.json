@@ -1,0 +1,21 @@
+{
+  "specversion": "1.0",
+  "id": "3b0d6c1e-8f2a-4d57-9c41-5a7e2b9d0c02",
+  "source": "/warehouse/facility-layout",
+  "type": "com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered",
+  "subject": "WH1-DOCK-D01",
+  "time": "2026-10-01T08:05:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:facility-layout:events:LocationSlotRegistered:v1",
+  "data": {
+    "eventName": "LocationSlotRegistered",
+    "eventType": "com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered",
+    "occurredAt": "2026-10-01T08:05:00Z",
+    "locationCode": "WH1-DOCK-D01",
+    "aisleId": "aisle-dock-1",
+    "zoneId": "zone-dock-wh1",
+    "locationType": "DOCK_DOOR",
+    "role": "Dock",
+    "dockFlow": "Both"
+  }
+}

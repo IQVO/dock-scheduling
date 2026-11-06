@@ -27,5 +27,14 @@ unleash:
     # differs. See HARNESS.md's mutation-testing section for the
     # tagless-switch-under-reports pitfall before assuming a low number
     # means missing tests.
-    efficacy: "0"
-    mutant-coverage: "0"
+    #
+    # Measured per domain package (gremlins v0.6.0, workers 1, timeout
+    # coefficient 30), one `gremlins unleash ./internal/domain/<pkg>` each:
+    #   internal/domain/dockappointment  efficacy 100.00%  mutant-coverage 100.00%  (106 killed / 0 lived)
+    #   internal/domain/dockcalendar     efficacy 100.00%  mutant-coverage 100.00%  (104 killed / 0 lived)
+    #   internal/domain/shared           efficacy 100.00%  mutant-coverage 100.00%  (14 killed / 0 lived)
+    # The thresholds sit strictly below every measurement (gremlins fails at
+    # <= threshold). `make mutation` and the `mutation-fast` CI job loop over
+    # EVERY one of these packages.
+    efficacy: "95"
+    mutant-coverage: "95"

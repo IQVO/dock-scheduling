@@ -1,0 +1,19 @@
+{
+  "specversion": "1.0",
+  "id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled",
+  "subject": "WH1",
+  "time": "2026-11-05T15:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:events:DoorClosureScheduled:v1",
+  "data": {
+    "site_id": "WH1",
+    "closure_id": "clo-123e4567-e89b-12d3-a456-426614174001",
+    "door_code": "WH1-DOCK-IN-01",
+    "from": "2026-11-10T00:00:00Z",
+    "to": "2026-11-11T00:00:00Z",
+    "reason": "Leveller maintenance",
+    "version": 3
+  }
+}

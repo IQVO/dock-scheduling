@@ -1,0 +1,32 @@
+{
+  "specversion": "1.0",
+  "id": "1d2e3f4a-5b6c-4d7e-8f9a-0b1c2d3e4f5a",
+  "source": "/warehouse/process-path-management",
+  "type": "com.warehouse.wes.process-path-management.cptschedule.CPTScheduleChanged",
+  "subject": "sp1",
+  "time": "2026-09-13T00:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:process-path-management:events:CPTScheduleChanged:v1",
+  "data": {
+    "site_id": "sp1",
+    "timezone": "America/Sao_Paulo",
+    "cutoffs": [
+      {
+        "cpt_id": "sp1-1500",
+        "local_time": "15:00",
+        "days_of_week": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri"
+        ],
+        "ship_method": "ground",
+        "eligible_path_ids": [
+          "PICK",
+          "PACK"
+        ]
+      }
+    ]
+  }
+}

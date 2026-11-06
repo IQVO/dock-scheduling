@@ -1,0 +1,21 @@
+{
+  "specversion": "1.0",
+  "id": "3b0d6c1e-8f2a-4d57-9c41-5a7e2b9d0c01",
+  "source": "/warehouse/facility-layout",
+  "type": "com.warehouse.wms.facility-layout.zone.ZoneRegistered",
+  "subject": "zone-dock-wh1",
+  "time": "2026-10-01T08:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:facility-layout:events:ZoneRegistered:v1",
+  "data": {
+    "eventName": "ZoneRegistered",
+    "eventType": "com.warehouse.wms.facility-layout.zone.ZoneRegistered",
+    "occurredAt": "2026-10-01T08:00:00Z",
+    "zoneId": "zone-dock-wh1",
+    "siteCode": "WH1",
+    "areaCode": "A-DOCK",
+    "zoneCode": "DOCK",
+    "temperatureClass": "Ambient",
+    "hazmat": false
+  }
+}

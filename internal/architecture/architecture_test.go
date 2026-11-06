@@ -20,7 +20,7 @@ import (
 	"github.com/arch-go/arch-go/api/configuration"
 )
 
-const modulePath = "github.com/IQVO/dock-scheduling"
+const modulePath = "github.com/claudioed/dock-scheduling"
 
 func TestHexagonalArchitecture(t *testing.T) {
 	moduleInfo := configuration.Load(modulePath)

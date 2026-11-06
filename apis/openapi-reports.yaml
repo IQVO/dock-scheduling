@@ -1,0 +1,268 @@
+openapi: 3.0.3
+info:
+  title: Dock Scheduling Reports API
+  version: 1.0.0
+  description: |
+    The READ-ONLY analytical surface of dock-scheduling's schedule-adherence data product (ADR 0006), served by the
+    separate `cmd/reports` binary over a read-only Postgres pool against the analytical database. It is NOT the OLTP
+    `cmd/api` API documented in `apis/openapi.yaml`: a different binary, port and database (ADR 0006).
+
+    The report is a projection over this service's own appointment events, delivered as CloudEvents 1.0 on the
+    `warehouse.dock-scheduling.analytics` topic and applied by `cmd/projector`, the single writer. It is EVENTUALLY
+    CONSISTENT: read `GET /reports/freshness` to see how long ago the most recently projected event happened.
+
+    Counts are per `(siteId, carrierScac)` over a half-open range `[from, to)` applied to the (current) window start of
+    each appointment. No route requires authentication (fleet decision 2026-09-11; access control is the in-cluster
+    boundary). Errors are RFC 7807 problem documents with `type =
+    https://errors.dock-scheduling.warehouse-systems.dev/<slug>`.
+  contact:
+    name: dock-scheduling maintainers
+    url: https://github.com/IQVO/dock-scheduling
+  license:
+    name: UNLICENSED
+servers:
+  - url: http://localhost:8092
+    description: Local development (cmd/reports, HTTP_ADDR default :8092)
+  - url: http://localhost:8000/api/dock-scheduling-reports
+    description: Local kind cluster through Kong
+tags:
+  - name: Reports
+    description: The schedule-adherence analytical read model.
+  - name: Health
+    description: Liveness, readiness and metrics probes of the reports process.
+
+paths:
+  /reports/schedule-adherence:
+    get:
+      operationId: getScheduleAdherence
+      summary: Schedule adherence report
+      description: |
+        On-time, early, late and no-show counts and shares per site and carrier over `[from, to)`, folded from this
+        service's analytics topic (ADR 0006). An appointment counts once it has an outcome: an arrival by its status
+        (`EARLY`, `ON_TIME`, `LATE`), an implicit arrival (completed without a check-in) as `ON_TIME`, a no-show as
+        `NO_SHOW`; an appointment that was only booked, or cancelled before anyone arrived, is not counted. The range
+        applies to the current window start. Mandatory range of at most 92 days; an empty or inverted range is a 400
+        `invalid-report-range`. A range with no data answers 200 with an empty `items`.
+      tags: [Reports]
+      parameters:
+        - name: siteId
+          in: query
+          required: false
+          description: Narrow to one site.
+          schema: { type: string }
+        - name: carrierScac
+          in: query
+          required: false
+          description: Narrow to one carrier (`-` selects appointments that had no SCAC).
+          schema: { type: string }
+        - name: from
+          in: query
+          required: true
+          description: RFC 3339 start of the range (inclusive).
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          description: RFC 3339 end of the range (exclusive).
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleAdherenceReport"
+              example:
+                from: "2026-11-01T00:00:00Z"
+                to: "2026-11-08T00:00:00Z"
+                items:
+                  - siteId: WH1
+                    carrierScac: ACMF
+                    onTime: 7
+                    early: 1
+                    late: 1
+                    noShow: 1
+                    total: 10
+                    onTimeShare: 0.7
+                    earlyShare: 0.1
+                    lateShare: 0.1
+                    noShowShare: 0.1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /reports/freshness:
+    get:
+      operationId: getReportsFreshness
+      summary: Freshness of the projection
+      description: |
+        How far the projection is behind (fleet analytics charter): `asOf` is the CloudEvents time of the newest event
+        the projector applied and `lagSeconds` is now minus `asOf`, never negative. Both are `null` until the first
+        event.
+      tags: [Reports]
+      responses:
+        "200":
+          description: The freshness of the projection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Freshness"
+              example:
+                asOf: "2026-11-05T12:00:00Z"
+                lagSeconds: 3.5
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /healthz:
+    get:
+      operationId: reportsHealthz
+      summary: Liveness probe
+      description: 200 while the process is running. It does not touch the analytical database.
+      tags: [Health]
+      responses:
+        "200":
+          description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+
+  /readyz:
+    get:
+      operationId: reportsReadyz
+      summary: Readiness probe
+      description: |
+        200 while the analytical database answers a ping (cached 3 s, bounded 2 s). 503 while draining for shutdown
+        (`{"status":"not_ready"}`) or while the analytical database is unreachable (problem `dependency-unavailable`).
+      tags: [Health]
+      responses:
+        "200":
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "503":
+          description: Not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/dependency-unavailable
+                title: A runtime dependency is unavailable
+                status: 503
+                detail: "not ready: analytics-postgres"
+                instance: /readyz
+
+  /metrics:
+    get:
+      operationId: reportsMetrics
+      summary: Prometheus metrics
+      description: The Prometheus scrape endpoint (text exposition format).
+      tags: [Health]
+      responses:
+        "200":
+          description: The metrics of the process.
+          content:
+            text/plain; version=0.0.4; charset=utf-8:
+              schema:
+                type: string
+
+components:
+  responses:
+    BadRequest:
+      description: An invalid or unknown query parameter, or an invalid report range.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalidReportRange:
+              summary: Missing, inverted or over-long range
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-report-range
+                title: Report range is invalid
+                status: 400
+                detail: "report range is invalid: from and to are required, from < to, at most 92 days"
+                instance: /reports/schedule-adherence
+            unknownQueryParameter:
+              summary: A query parameter the route does not define
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/unknown-query-parameter
+                title: Unknown query parameter
+                status: 400
+                detail: "unknown query parameter \"limit\""
+                instance: /reports/schedule-adherence
+    InternalError:
+      description: Unexpected server error (for example the analytical database failed).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.dock-scheduling.warehouse-systems.dev/internal-error
+            title: Internal server error
+            status: 500
+            detail: an unexpected error occurred
+            instance: /reports/schedule-adherence
+
+  schemas:
+    AdherenceRow:
+      type: object
+      required: [siteId, carrierScac, onTime, early, late, noShow, total]
+      properties:
+        siteId: { type: string }
+        carrierScac: { type: string, description: "`-` when the appointment had no SCAC." }
+        onTime: { type: integer }
+        early: { type: integer }
+        late: { type: integer }
+        noShow: { type: integer }
+        total: { type: integer }
+        onTimeShare: { type: number }
+        earlyShare: { type: number }
+        lateShare: { type: number }
+        noShowShare: { type: number }
+    ScheduleAdherenceReport:
+      type: object
+      required: [from, to, items]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdherenceRow" }
+    Freshness:
+      type: object
+      required: [asOf, lagSeconds]
+      properties:
+        asOf:
+          type: string
+          format: date-time
+          nullable: true
+          description: CloudEvents time of the newest applied event; `null` before the first.
+        lagSeconds:
+          type: number
+          nullable: true
+          description: Now minus `asOf` in seconds, never negative; `null` before the first event.
+    Problem:
+      type: object
+      description: RFC 7807 problem document used for every non-2xx response.
+      required: [type, title, status, detail, instance]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, format: int32 }
+        detail: { type: string }
+        instance: { type: string }
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }
