@@ -115,7 +115,7 @@ CancelWhenAllAsnsCancelled, LegacyImport (stage A). PickupFromCutoffs is phase 2
 - **A14** The adherence report is folded from this service's own analytics topic (ADR 0006): per site and carrier the on-time, early,
   late and no-show counts and shares over a mandatory `from`/`to` range.
 - **A15** MCP authority (agentic standard v2): read tools L1 (list_appointments, get_appointment, get_door_availability,
-  get_dock_calendar, list_at_risk_appointments); book/reschedule/cancel/report_eta L2 with a mandatory `initiated_by`. Calendar
+  get_dock_calendar, list_at_risk_appointments); book/reschedule/cancel/report_eta L3 (the fleet rule reserves L1/L2 for read tools; D-6 said L2, corrected by ADR 0007) with a mandatory `initiated_by`. Calendar
   changes and the sweep are not exposed over MCP. No tool records an arrival or a door release (physical facts of yard-management).
 - **A16** Idempotency-Key is required on every creating POST and replays answer byte-identically with `Idempotency-Replayed: true`;
   PUT is idempotent by method.

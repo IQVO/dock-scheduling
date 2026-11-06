@@ -21,6 +21,9 @@ info:
     `Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
     RFC 7807 problem documents with `type = https://errors.dock-scheduling.warehouse-systems.dev/<slug>`. There is no
     authentication layer (fleet decision 2026-09-11).
+
+    The schedule-adherence report (`GET /reports/schedule-adherence`) and the projection freshness are NOT served by this
+    API: they live on the separate `cmd/reports` binary, specified in `apis/openapi-reports.yaml` (ADR 0006).
   contact:
     name: dock-scheduling maintainers
     url: https://github.com/IQVO/dock-scheduling
@@ -40,8 +43,6 @@ tags:
     description: Per-site operating hours, closures and booking settings.
   - name: Sweeps
     description: The scheduled no-show sweep.
-  - name: Reports
-    description: Schedule adherence from the analytics read side.
   - name: Health
     description: Liveness, readiness and metrics probes.
 
@@ -567,47 +568,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /reports/schedule-adherence:
-    get:
-      operationId: getScheduleAdherence
-      summary: Schedule adherence report
-      description: |
-        On-time, early, late and no-show counts and shares per site and carrier over `[from, to)`, folded from this
-        service's analytics topic (ADR 0006). Served by the reports binary. Mandatory range of at most 92 days.
-      tags: [Reports]
-      parameters:
-        - name: siteId
-          in: query
-          required: false
-          description: Narrow to one site.
-          schema: { type: string }
-        - name: carrierScac
-          in: query
-          required: false
-          description: Narrow to one carrier.
-          schema: { type: string }
-        - name: from
-          in: query
-          required: true
-          description: RFC 3339 start of the range (inclusive).
-          schema: { type: string, format: date-time }
-        - name: to
-          in: query
-          required: true
-          description: RFC 3339 end of the range (exclusive).
-          schema: { type: string, format: date-time }
-      responses:
-        "200":
-          description: The report.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScheduleAdherenceReport"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
   /healthz:
     get:
       operationId: healthz
@@ -852,14 +812,6 @@ components:
                 status: 400
                 detail: availability range must be from < to, at most 14 days, minutes 1..240
                 instance: /doors/WH1-DOCK-IN-01/availability
-            invalidReportRange:
-              summary: from and to are required, from < to, at most 92 days
-              value:
-                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-report-range
-                title: Report range is invalid
-                status: 400
-                detail: "report range is invalid: from and to are required, from < to, at most 92 days"
-                instance: /reports/schedule-adherence
     NotFound:
       description: No appointment, door or closure has this id, or the path holds a NUL byte.
       content:
@@ -1391,31 +1343,6 @@ components:
         count: { type: integer }
         appointmentIds: { type: array, items: { type: string } }
         ranAt: { type: string, format: date-time }
-    AdherenceRow:
-      type: object
-      required: [siteId, carrierScac, onTime, early, late, noShow, total]
-      properties:
-        siteId: { type: string }
-        carrierScac: { type: string, description: "`-` when the appointment had no SCAC." }
-        onTime: { type: integer }
-        early: { type: integer }
-        late: { type: integer }
-        noShow: { type: integer }
-        total: { type: integer }
-        onTimeShare: { type: number }
-        earlyShare: { type: number }
-        lateShare: { type: number }
-        noShowShare: { type: number }
-    ScheduleAdherenceReport:
-      type: object
-      required: [from, to, items]
-      properties:
-        from: { type: string, format: date-time }
-        to: { type: string, format: date-time }
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/AdherenceRow" }
-
     Problem:
       type: object
       description: RFC 7807 problem document used for every non-2xx response.
