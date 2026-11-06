@@ -1,0 +1,27 @@
+{
+  "specversion": "1.0",
+  "id": "7c1f3a52-0d4e-4b8a-9e61-2a5d8f0c3b14",
+  "source": "/warehouse/inbound-receiving",
+  "type": "com.warehouse.wms.inbound-receiving.asn.ASNRegistered",
+  "subject": "ASN-1001",
+  "time": "2026-10-08T12:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:inbound-receiving:events:ASNRegistered:v1",
+  "data": {
+    "asn_number": "ASN-1001",
+    "supplier_ref": "ACME",
+    "expected_arrival": "2026-10-09T08:00:00Z",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "SKU-1",
+        "expected_qty": 40
+      },
+      {
+        "line_no": 2,
+        "sku": "SKU-2",
+        "expected_qty": 5
+      }
+    ]
+  }
+}

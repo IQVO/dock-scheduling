@@ -1,0 +1,18 @@
+{
+  "specversion": "1.0",
+  "id": "7f3c9a52-1b8d-4e6f-9a07-000000000002",
+  "source": "/warehouse/yard-management",
+  "type": "com.warehouse.wms.yard-management.yardvisit.VisitRejected",
+  "subject": "visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c",
+  "time": "2026-11-05T14:05:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:yard-management:events:VisitRejected:v1",
+  "data": {
+    "visit_id": "visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c",
+    "site_id": "WH1",
+    "carrier_scac": "ACME",
+    "appointment_id": null,
+    "reason": "APPOINTMENT_REQUIRED",
+    "rejected_at": "2026-11-05T14:05:00Z"
+  }
+}
