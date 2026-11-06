@@ -108,7 +108,8 @@ CancelWhenAllAsnsCancelled, LegacyImport (stage A). PickupFromCutoffs is phase 2
   `carrier_scac` null, version 1, state BOOKED, site from the local door join; an unknown door skips the event and counts it) and
   raises DockAppointmentBooked. It enforces none of window-in-past, hours, closures, overlap or known-ASN. Importing is idempotent by
   appointment id. Later legacy CheckedIn / Cancelled (reason CARRIER_REQUEST) / Completed events move only appointments whose
-  provenance is `legacy-import` and raise this service's normal events. An import rejected by the exclusion constraint is dead-lettered.
+  provenance is `legacy-import` and raise this service's normal events. The door exclusion constraint does not cover legacy imports
+  (ADR 0005, A19), so an overlapping import is stored as the legacy system had it.
 - **A13** NoShowSweep: `POST /no-show-sweeps` marks every BOOKED appointment with `window_end + no_show_grace <= now` (grace per site,
   default 60 min), each in its own transaction; the answer lists the ids. Naturally idempotent; also takes an Idempotency-Key.
 - **A14** The adherence report is folded from this service's own analytics topic (ADR 0006): per site and carrier the on-time, early,

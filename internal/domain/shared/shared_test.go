@@ -72,6 +72,7 @@ func TestNewCarrier(t *testing.T) {
 		{"empty", "", "", false},
 		{"too long", strings.Repeat("c", shared.MaxCarrierLength+1), "", false},
 		{"control", "ACME\x07", "", false},
+		{"control first", "\x07ACME", "", false},
 		{"scac lower", "ACME", "acmf", false},
 		{"scac short", "ACME", "A", false},
 		{"scac long", "ACME", "ACMFX", false},
