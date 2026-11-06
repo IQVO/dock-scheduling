@@ -246,10 +246,11 @@ func TestAPI_RealPostgresAndKafka(t *testing.T) {
 	t.Run("the same Idempotency-Key replays the answer and changes nothing", j.replay)
 	t.Run("a stale If-Match is refused and a fresh one cancels", j.cancel)
 	t.Run("an empty no-show sweep answers 200", j.sweep)
-	t.Run("the schedule-adherence report answers the contract shape", j.report)
+	t.Run("the schedule-adherence report is not served by the OLTP API", j.report)
 	t.Run("the relay publishes the exact CloudEvents to both topics and the outbox drains", j.publishedEvents)
 	t.Run("yard, ASN and legacy facts through Kafka drive the appointments", j.facts)
 	t.Run("the fact-driven transitions publish their events", j.factEvents)
+	t.Run("the analytics projection counts the arrivals the service published", j.adherence)
 	t.Run("stopping Kafka turns /readyz into a dependency-unavailable problem", j.kafkaOutage)
 	t.Run("run returns nil within a bound once the context is cancelled, broker or not", j.shutdown)
 }
@@ -312,17 +313,13 @@ func (j *journey) sweep(t *testing.T) {
 }
 
 func (j *journey) report(t *testing.T) {
+	// The reports read the separate analytical database and are served by
+	// cmd/reports (ADR 0006): the OLTP API must not answer them, least of all
+	// with an empty report.
 	q := fmt.Sprintf("/reports/schedule-adherence?siteId=WH1&from=%s&to=%s",
 		j.windowStart.Add(-24*time.Hour).Format(time.RFC3339), j.windowEnd.Add(24*time.Hour).Format(time.RFC3339))
-	status, _, body := j.a.do(t, "GET", q, nil, nil)
-	if status != http.StatusOK {
-		t.Fatalf("GET report = %d: %s", status, body)
-	}
-	// No analytics read side yet (D-13): the contract shape with no rows.
-	report := decode(t, body)
-	items, ok := report["items"].([]any)
-	if !ok || len(items) != 0 || report["from"] == nil || report["to"] == nil {
-		t.Errorf("report = %s, want from/to and an empty items array", body)
+	if status, _, body := j.a.do(t, "GET", q, nil, nil); status != http.StatusNotFound {
+		t.Fatalf("GET report on the OLTP API = %d, want 404 (served by cmd/reports): %s", status, body)
 	}
 }
 

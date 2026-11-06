@@ -29,8 +29,9 @@ type Server struct {
 	// Now stamps the stored idempotency answers (time.Now when nil).
 	Now func() time.Time
 
-	// Adherence backs GET /reports/schedule-adherence (D-13). Nil (the
-	// analytics read side has not landed) serves the contract shape with no rows.
+	// Adherence backs GET /reports/schedule-adherence (D-13). It is only used
+	// by NewReportsRouter (cmd/reports): the OLTP router does not serve the
+	// reports, because they read the separate analytical database (ADR 0006).
 	Adherence ports.AdherenceReader
 
 	// Readiness backs GET /readyz: the drain gate plus the Postgres and Kafka
@@ -76,7 +77,7 @@ func NewRouter(s *Server) http.Handler {
 	r.With(keyed).Post("/sites/{siteId}/dock-calendar/closures/{closureId}/lifts", s.handleLiftClosure)
 
 	r.With(s.keyed(true)).Post("/no-show-sweeps", s.handleNoShowSweep)
-	r.Get("/reports/schedule-adherence", s.handleScheduleAdherence)
+	// The reports (GET /reports/*) are served by cmd/reports (NewReportsRouter).
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeProblem(w, r, notFoundResource, "no such path") })
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {

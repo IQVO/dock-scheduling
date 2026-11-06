@@ -10,7 +10,6 @@ import (
 	"time"
 
 	inboundhttp "github.com/claudioed/dock-scheduling/internal/adapters/inbound/http"
-	"github.com/claudioed/dock-scheduling/internal/application/repository"
 )
 
 func TestNULInAPathQueryOrBodyIsAClientError(t *testing.T) {
@@ -132,63 +131,4 @@ func TestAPanickingHandlerIsA500Problem(t *testing.T) {
 	rec := httptest.NewRecorder()
 	inboundhttp.NewRouter(srv).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/appointments/appt-00000000-0000-0000-0000-000000000000", nil))
 	wantProblem(t, rec, 500, "internal-error")
-}
-
-type fakeAdherence struct {
-	rows []repository.AdherenceRow
-	err  error
-	got  repository.AdherenceQuery
-}
-
-func (f *fakeAdherence) ScheduleAdherence(_ context.Context, q repository.AdherenceQuery) ([]repository.AdherenceRow, error) {
-	f.got = q
-	return f.rows, f.err
-}
-
-func TestScheduleAdherenceReportWithoutAReadSideIsEmpty(t *testing.T) {
-	e := newEnv(t)
-	rec := e.get("/reports/schedule-adherence" + adherenceRange)
-	wantStatus(t, rec, http.StatusOK)
-	b := decode(t, rec)
-	if items, ok := b["items"].([]any); !ok || len(items) != 0 || b["from"] != "2030-01-01T00:00:00Z" || b["to"] != "2030-02-01T00:00:00Z" {
-		t.Fatalf("an empty report keeps the contract shape: %s", rec.Body.String())
-	}
-}
-
-const adherenceRange = "?from=2030-01-01T00:00:00Z&to=2030-02-01T00:00:00Z"
-
-func TestScheduleAdherenceReportComputesTotalsAndShares(t *testing.T) {
-	e := newEnv(t)
-	reader := &fakeAdherence{rows: []repository.AdherenceRow{
-		{SiteID: "WH1", CarrierSCAC: "ACMF", OnTime: 6, Early: 1, Late: 2, NoShow: 1},
-		{SiteID: "WH1", CarrierSCAC: "-"},
-	}}
-	e.server.Adherence = reader
-	e.router = inboundhttp.NewRouter(e.server)
-	rec := e.get("/reports/schedule-adherence" + adherenceRange + "&siteId=WH1&carrierScac=ACMF")
-	wantStatus(t, rec, http.StatusOK)
-	if reader.got.SiteID != "WH1" || reader.got.CarrierSCAC != "ACMF" || !reader.got.From.Equal(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatalf("the query reaches the read side: %+v", reader.got)
-	}
-	items := decode(t, rec)["items"].([]any)
-	first := items[0].(map[string]any)
-	if first["total"] != float64(10) || first["onTimeShare"] != 0.6 || first["earlyShare"] != 0.1 || first["lateShare"] != 0.2 || first["noShowShare"] != 0.1 {
-		t.Fatalf("totals and shares: %v", first)
-	}
-	if empty := items[1].(map[string]any); empty["total"] != float64(0) || empty["onTimeShare"] != float64(0) {
-		t.Fatalf("a row with no appointments has zero shares, not NaN: %v", empty)
-	}
-}
-
-func TestScheduleAdherenceReportRefusals(t *testing.T) {
-	e := newEnv(t)
-	for _, bad := range []string{"", "?from=2030-01-01T00:00:00Z", "?from=2030-02-01T00:00:00Z&to=2030-01-01T00:00:00Z", "?from=2030-01-01T00:00:00Z&to=2030-06-01T00:00:00Z"} {
-		wantProblem(t, e.get("/reports/schedule-adherence"+bad), 400, "invalid-report-range")
-	}
-	wantProblem(t, e.get("/reports/schedule-adherence?from=nope&to=2030-01-01T00:00:00Z"), 400, "invalid-query-parameter")
-	wantProblem(t, e.get("/reports/schedule-adherence"+adherenceRange+"&limit=5"), 400, "unknown-query-parameter")
-
-	e.server.Adherence = &fakeAdherence{err: errors.New("db down")}
-	e.router = inboundhttp.NewRouter(e.server)
-	wantProblem(t, e.get("/reports/schedule-adherence"+adherenceRange), 500, "internal-error")
 }

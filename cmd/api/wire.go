@@ -76,8 +76,8 @@ func buildServer(ad adapters, svc *usecases.Service, readiness *inboundhttp.Read
 		Idempotency: ad.idempotency,
 		UoW:         ad.deps.UoW,
 		Now:         ad.deps.Clock.Now,
-		// Adherence stays nil until the analytics read side lands (D-13): the
-		// report route answers the contract shape with no rows.
+		// No Adherence: the reports read the analytical database and are
+		// served by cmd/reports (ADR 0006), not by this router.
 		Readiness: readiness,
 		Metrics:   metrics.Handler(),
 		Observe:   metrics.ObserveHTTP,

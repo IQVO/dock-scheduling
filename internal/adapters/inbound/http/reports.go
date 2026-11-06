@@ -33,8 +33,8 @@ type adherenceReportBody struct {
 }
 
 // handleScheduleAdherence is GET /reports/schedule-adherence (D-13). It serves
-// the contract shape from the Adherence read-side port; without one (the
-// analytics projector is a later step) the report is empty.
+// the contract shape from the Adherence read-side port (the analytics store,
+// ADR 0006); the route lives on NewReportsRouter, not on the OLTP router.
 func (s *Server) handleScheduleAdherence(w http.ResponseWriter, r *http.Request) {
 	if name := unknownParam(r, "siteId", "carrierScac", "from", "to"); name != "" {
 		writeError(w, r, errUnknownQuery(name))
