@@ -1,0 +1,14 @@
+{
+  "specversion": "1.0",
+  "id": "1e9b4d70-3c2a-4f5d-8b17-6a0c9d2e7f31",
+  "source": "/warehouse/inbound-receiving",
+  "type": "com.warehouse.wms.inbound-receiving.asn.ASNCancelled",
+  "subject": "ASN-1001",
+  "time": "2026-10-08T12:30:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:inbound-receiving:events:ASNCancelled:v1",
+  "data": {
+    "asn_number": "ASN-1001",
+    "reason": "Supplier cancelled the shipment"
+  }
+}

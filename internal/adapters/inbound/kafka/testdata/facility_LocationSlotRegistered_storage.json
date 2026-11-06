@@ -1,0 +1,21 @@
+{
+  "specversion": "1.0",
+  "id": "3b0d6c1e-8f2a-4d57-9c41-5a7e2b9d0c03",
+  "source": "/warehouse/facility-layout",
+  "type": "com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered",
+  "subject": "WH1-STOR-AMB-A07-03-02-B",
+  "time": "2026-10-01T08:06:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:facility-layout:events:LocationSlotRegistered:v1",
+  "data": {
+    "eventName": "LocationSlotRegistered",
+    "eventType": "com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered",
+    "occurredAt": "2026-10-01T08:06:00Z",
+    "locationCode": "WH1-STOR-AMB-A07-03-02-B",
+    "aisleId": "aisle-a07",
+    "zoneId": "zone-stor-wh1",
+    "locationType": "RACK_BIN",
+    "role": "Storage",
+    "maxWeightKg": 500
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "specversion": "1.0",
+  "id": "7f3c9a52-1b8d-4e6f-9a07-000000000001",
+  "source": "/warehouse/yard-management",
+  "type": "com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn",
+  "subject": "visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10",
+  "time": "2026-11-05T14:02:11Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:yard-management:events:VisitCheckedIn:v1",
+  "data": {
+    "visit_id": "visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10",
+    "site_id": "WH1",
+    "carrier": "Acme Freight",
+    "carrier_scac": "ACME",
+    "purpose": "LIVE_UNLOAD",
+    "appointment_id": "appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+    "trailers": [
+      {
+        "trailer_id": "trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a",
+        "unit_number": "TR-1042",
+        "carrier_scac": "ACME",
+        "kind": "DRY_VAN",
+        "load_state": "LOADED"
+      }
+    ],
+    "arrived_at": "2026-11-05T14:02:11Z",
+    "version": 1
+  }
+}
