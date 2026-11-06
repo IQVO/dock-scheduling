@@ -191,3 +191,17 @@ func Shutdown() {
 		_ = testcontainers.TerminateContainer(container)
 	}
 }
+
+// Stop stops the shared broker (the container stays, so Shutdown can still
+// terminate it) to prove how a service behaves while Kafka is DOWN. Nothing
+// restarts it: call it last in a test binary, or from a test that owns the
+// binary's only broker use.
+func Stop(t *testing.T) {
+	t.Helper()
+	Brokers(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := container.Stop(ctx, nil); err != nil {
+		t.Fatalf("stop kafka container: %v", err)
+	}
+}
