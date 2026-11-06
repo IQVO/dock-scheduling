@@ -333,3 +333,30 @@ func TestToleranceMinutes(t *testing.T) {
 		t.Fatalf("ToleranceMinutes = %d", got)
 	}
 }
+
+func TestReferenceAndSealLengthAndControlBoundaries(t *testing.T) {
+	ok64, bad65 := strings.Repeat("r", 64), strings.Repeat("r", 65)
+	mut := func(f func(*da.BookParams)) error {
+		p := inbound()
+		f(&p)
+		_, _, err := da.Book(p)
+		return err
+	}
+	cases := []struct {
+		name string
+		f    func(*da.BookParams)
+		ok   bool
+	}{
+		{"seal 64", func(p *da.BookParams) { p.ExpectedSeal = ok64 }, true},
+		{"seal 65", func(p *da.BookParams) { p.ExpectedSeal = bad65 }, false},
+		{"seal leading control", func(p *da.BookParams) { p.ExpectedSeal = "\x01abc" }, false},
+		{"asn 64", func(p *da.BookParams) { p.ASNNumbers = []string{ok64} }, true},
+		{"asn 65", func(p *da.BookParams) { p.ASNNumbers = []string{bad65} }, false},
+		{"asn leading control", func(p *da.BookParams) { p.ASNNumbers = []string{"\x01X"} }, false},
+	}
+	for _, tc := range cases {
+		if err := mut(tc.f); (err == nil) != tc.ok {
+			t.Errorf("%s: err = %v; want ok=%v", tc.name, err, tc.ok)
+		}
+	}
+}

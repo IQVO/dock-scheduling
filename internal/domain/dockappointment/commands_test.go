@@ -391,3 +391,23 @@ func TestMarkNoShow(t *testing.T) {
 		t.Fatalf("state %s risk %q", a.State(), a.AtRisk())
 	}
 }
+
+func TestDoorOverrideMarksAPhysicalReassignment(t *testing.T) {
+	a := mustBook(t, inbound())
+	if a.DoorOverride() {
+		t.Fatal("a booked door is not an override")
+	}
+	if _, err := a.ReassignDoor("WH1-DOCK-IN-02", now); err != nil || !a.DoorOverride() {
+		t.Fatalf("reassign: %v override=%v", err, a.DoorOverride())
+	}
+	restored, err := da.Restore(a.Snapshot())
+	if err != nil || !restored.DoorOverride() {
+		t.Fatalf("override must survive a snapshot round trip: %v", err)
+	}
+	if _, err := a.ReassignDoor("WH1-DOCK-IN-02", now); err != nil || !a.DoorOverride() {
+		t.Fatal("a no-op reassignment keeps the flag")
+	}
+	if _, err := a.Reschedule("", t900, t1200, rules, now); err != nil || a.DoorOverride() {
+		t.Fatalf("a checked reschedule clears the override: %v", err)
+	}
+}

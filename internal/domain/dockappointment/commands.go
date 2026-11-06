@@ -34,7 +34,7 @@ func (a *DockAppointment) Reschedule(doorCode string, start, end time.Time, r Ru
 		return nil, ErrWindowInPast
 	}
 	previous, previousDoor := a.window, a.door
-	a.window, a.door = w, door
+	a.window, a.door, a.override = w, door, false
 	a.eta, a.atRisk = nil, ""
 	a.touch(now)
 	return []Event{RescheduledEvent{
@@ -125,7 +125,7 @@ func (a *DockAppointment) ReassignDoor(doorCode string, now time.Time) ([]Event,
 		return nil, nil
 	}
 	from := a.door
-	a.door = door
+	a.door, a.override = door, true
 	a.touch(now)
 	return []Event{DoorReassigned{Header: a.header(now), FromDoorCode: string(from), ToDoorCode: string(door)}}, nil
 }

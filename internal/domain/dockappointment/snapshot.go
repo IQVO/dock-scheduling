@@ -22,6 +22,7 @@ type Snapshot struct {
 	ShipmentRefs       []string
 	ExpectedSeal       string
 	Provenance         Provenance
+	DoorOverride       bool
 	State              State
 	Version            int64
 	Eta                *Eta
@@ -38,7 +39,7 @@ func (a *DockAppointment) Snapshot() Snapshot {
 	return Snapshot{
 		ID: string(a.id), SiteID: string(a.site), DoorCode: string(a.door), Direction: string(a.direction), Carrier: a.carrier.Name(),
 		CarrierSCAC: a.carrier.SCAC(), WindowStart: a.window.start, WindowEnd: a.window.end, ASNNumbers: a.ASNNumbers(), CPTID: a.cptID,
-		ShipmentRefs: a.ShipmentRefs(), ExpectedSeal: a.seal, Provenance: a.provenance, State: a.state, Version: a.version, Eta: a.Eta(),
+		ShipmentRefs: a.ShipmentRefs(), ExpectedSeal: a.seal, Provenance: a.provenance, DoorOverride: a.override, State: a.state, Version: a.version, Eta: a.Eta(),
 		Arrival: a.Arrival(), AtRisk: a.atRisk, CompletedAt: a.completed, CancellationReason: a.reason, CreatedAt: a.createdAt, UpdatedAt: a.updatedAt,
 	}
 }
@@ -69,7 +70,7 @@ func Restore(s Snapshot) (*DockAppointment, error) {
 	if err = restoreState(a, s); err != nil {
 		return nil, err
 	}
-	a.provenance, a.state, a.version = s.Provenance, s.State, s.Version
+	a.provenance, a.state, a.version, a.override = s.Provenance, s.State, s.Version, s.DoorOverride
 	a.seal, a.createdAt, a.updatedAt = s.ExpectedSeal, s.CreatedAt.UTC(), s.UpdatedAt.UTC()
 	if s.Eta != nil {
 		e := *s.Eta

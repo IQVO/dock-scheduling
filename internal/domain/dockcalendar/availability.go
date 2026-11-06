@@ -31,9 +31,7 @@ func (c *DockCalendar) Availability(door shared.DoorCode, from, to time.Time, ap
 	}
 	sort.SliceStable(busy, func(i, j int) bool { return busy[i].Start.Before(busy[j].Start) })
 	g := c.settings.Granularity()
-	if min < g {
-		min = g
-	}
+	min = max(min, g)
 	for _, o := range open {
 		for _, piece := range subtract(o, busy) {
 			s, e := roundUp(piece.Start, g), floor(piece.End, g)

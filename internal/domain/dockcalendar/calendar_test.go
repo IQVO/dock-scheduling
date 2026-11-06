@@ -315,6 +315,7 @@ func TestScheduleClosureRejects(t *testing.T) {
 		{"empty span", closureA, "D1", monUTC(1, 0), monUTC(1, 0), "x", dc.ErrInvalidClosure},
 		{"reversed span", closureA, "D1", monUTC(2, 0), monUTC(1, 0), "x", dc.ErrInvalidClosure},
 		{"blank reason", closureA, "D1", monUTC(0, 0), monUTC(1, 0), "  ", dc.ErrInvalidClosure},
+		{"leading control reason", closureA, "D1", monUTC(0, 0), monUTC(1, 0), "\x00abc", dc.ErrInvalidClosure},
 		{"control reason", closureA, "D1", monUTC(0, 0), monUTC(1, 0), "a\x00", dc.ErrInvalidClosure},
 		{"long reason", closureA, "D1", monUTC(0, 0), monUTC(1, 0), repeat("r", 201), dc.ErrInvalidClosure},
 	}

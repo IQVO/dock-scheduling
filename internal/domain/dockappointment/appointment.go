@@ -32,6 +32,7 @@ type DockAppointment struct {
 	shipments  []string
 	seal       string
 	provenance Provenance
+	override   bool
 	state      State
 	version    int64
 	eta        *Eta
@@ -282,6 +283,10 @@ func (a *DockAppointment) Arrival() *Arrival {
 	v := *a.arrival
 	return &v
 }
+
+// DoorOverride reports whether the door was set by a physical fact (ReassignDoor) rather
+// than by a checked booking; such an appointment is outside the storage overlap constraint.
+func (a *DockAppointment) DoorOverride() bool { return a.override }
 
 // CancellationReason returns the reason of a CANCELLED appointment, or "".
 func (a *DockAppointment) CancellationReason() Reason { return a.reason }

@@ -38,11 +38,13 @@ and of extra fields. Process-path-management is a `wes` subdomain event (type se
 | `doors(location_code pk, zone_id, dock_flow)` | LocationSlotRegistered with role Dock | upsert; a re-registration with another role removes the row; LocationSlotDecommissioned deletes it |
 | `asns(asn_number pk, state, expected_arrival)` | ASNRegistered, ASNCancelled | state REGISTERED or CANCELLED; CANCELLED is sticky (a late ASNRegistered never revives it); a cancel before the register inserts CANCELLED |
 | `cutoffs(site_id, cpt_id, timezone, local_time, days_of_week, ship_method, pk(site_id, cpt_id))` | CPTScheduleChanged | the event is the whole schedule of the site: replace all rows of the site in one transaction |
-| `yard_fact_ignored(reason, count)` | yard policies | counter of ignored/unknown/terminal facts (OutOfOrderYardFacts) |
 | `processed_events(event_id pk, consumer, claimed_at)` | every consumer | the dedupe guard, one row per CloudEvents id |
 
 A door's site is `zones.site_code` joined on `doors.zone_id` at use time (X5). A door whose zone has not arrived yet is held pending
 (the row exists, the join is empty) and a booking for it is refused with ErrUnknownDoor until the zone event lands.
+
+Ignored facts (unknown, terminal, wrong-site, already-applied, not-a-legacy-import, unknown door) and implicit arrivals are counted in
+Prometheus counters (`dock_scheduling_ignored_facts_total{reason}`, `dock_scheduling_implicit_arrivals_total`), not in a table.
 
 ## Yard facts and ordering
 
@@ -61,11 +63,11 @@ ArrivalFromGate, ActualDoorWins, CompleteOnDoorRelease and OutOfOrderYardFacts (
 ## Database backstops
 
 - Exclusion constraint `dock_appointments_no_overlap` on `(door_code WITH =, tstzrange(window_start, window_end, '[)') WITH &&)
-  WHERE state IN ('BOOKED','CHECKED_IN')` (extension `btree_gist`), behind the per-door advisory lock
+  WHERE state IN ('BOOKED','CHECKED_IN') AND NOT door_override` (extension `btree_gist`), behind the per-door advisory lock
   `pg_advisory_xact_lock(hashtextextended(door_code, 0))`. ActualDoorWins reassigns without the application overlap check; the
   constraint would reject a reassignment onto a door where another active appointment overlaps, so the reassignment is applied
-  as a door-reservation exception: the physical fact wins, the row is written with `overlap_override = true` (excluded from the
-  constraint) and the overlap is surfaced as DockAppointmentAtRisk (cause DOOR_REASSIGNED_OVERLAP).
+  as a door-reservation exception: the physical fact wins, the row is written with `door_override = true` (excluded from the
+  constraint; the aggregate sets it in ReassignDoor and a checked reschedule clears it) and the overlap is surfaced as DockAppointmentAtRisk (cause DOOR_REASSIGNED_OVERLAP).
 - The importer's id claim is the aggregate id itself: the legacy appointment id (`appt-<uuid>`) is the primary key, so a replayed
   legacy Booked event is a no-op (`INSERT ... ON CONFLICT DO NOTHING` in the same transaction as the `processed_events` claim).
 - Partial unique index `dock_appointment_asns_active` on `(asn_number) WHERE active` over the `dock_appointment_asns` rows of

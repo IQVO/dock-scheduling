@@ -163,10 +163,10 @@ type Rules struct {
 }
 
 func (r Rules) maxWindow() time.Duration {
-	if r.MaxWindow <= 0 || r.MaxWindow > HardMaxWindow {
+	if r.MaxWindow <= 0 {
 		return HardMaxWindow
 	}
-	return r.MaxWindow
+	return min(r.MaxWindow, HardMaxWindow)
 }
 
 // ToleranceMinutes returns the arrival tolerance in whole minutes.
@@ -217,10 +217,10 @@ func (w Window) Overlaps(other Window) bool {
 // Classify compares a gate arrival with the window: EARLY before
 // start - tolerance, LATE after start + tolerance, else ON_TIME.
 func Classify(w Window, tolerance time.Duration, at time.Time) ArrivalStatus {
-	switch {
-	case at.Before(w.start.Add(-tolerance)):
+	if at.Before(w.start.Add(-tolerance)) {
 		return Early
-	case at.After(w.start.Add(tolerance)):
+	}
+	if at.After(w.start.Add(tolerance)) {
 		return Late
 	}
 	return OnTime
