@@ -20,16 +20,18 @@ import (
 
 	"github.com/claudioed/dock-scheduling/internal/adapters/kafka/cloudevents"
 	outboundkafka "github.com/claudioed/dock-scheduling/internal/adapters/outbound/kafka"
-	"github.com/claudioed/dock-scheduling/internal/adapters/outbound/postgres"
-	"github.com/claudioed/dock-scheduling/internal/domain/shared"
 	"github.com/claudioed/dock-scheduling/internal/testing/kafkatest"
 	"github.com/claudioed/dock-scheduling/internal/testing/pgtest"
 )
 
 // The REAL composition root against REAL infrastructure, both from
 // testcontainers: run(ctx) reads the environment exactly as in production,
-// migrates a fresh Postgres, serves the REST router and drains the outbox to a
-// real broker. The assertions are the Postgres rows and the exact CloudEvents
+// migrates a fresh Postgres, runs all five Kafka consumers, serves the REST
+// router and drains the outbox to a real broker. It is driven only through REST
+// and Kafka: the doors, zones and ASNs, the gate arrival, the dock and the door
+// release, a rejected visit and an out-of-order release all arrive as
+// CloudEvents on the producers' topics, nothing is seeded into Postgres. The
+// assertions are the REST views, the Postgres rows and the exact CloudEvents
 // on both topics. The Kafka broker comes from internal/testing/kafkatest,
 // which starts it through testcontainers-go/modules/kafka (referenced here so
 // the module import stays reachable from this Kafka-touching file).
@@ -71,6 +73,7 @@ func startAPI(t *testing.T, databaseURL string, brokers []string) *api {
 	t.Setenv("KAFKA_BROKERS", strings.Join(brokers, ","))
 	t.Setenv("OUTBOX_RELAY_INTERVAL", "200ms")
 	t.Setenv("SHUTDOWN_DRAIN_DELAY", "0s")
+	consumerEnv(t)
 	ctx, stop := context.WithCancel(context.Background())
 	a := &api{base: "http://" + addr, stop: stop, done: make(chan error, 1)}
 	go func() { a.done <- run(ctx) }()
@@ -199,25 +202,6 @@ func count(t *testing.T, databaseURL, sql string, args ...any) int {
 	return n
 }
 
-// seedReferenceData fills the local copies the Kafka consumers fill in
-// production (the consumers are wired by their own step): the facility
-// layout's door and inbound-receiving's ASN.
-func seedReferenceData(t *testing.T, databaseURL string) {
-	t.Helper()
-	ctx := context.Background()
-	pool := pgtest.Open(t, databaseURL)
-	doors := postgres.NewDoorStore(pool)
-	if err := doors.UpsertZone(ctx, "zone-WH1-in", "WH1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := doors.UpsertDoor(ctx, door, "zone-WH1-in", shared.DockFlow("Inbound")); err != nil {
-		t.Fatal(err)
-	}
-	if err := postgres.NewAsnStore(pool).Register(ctx, asn, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // journey is the state the steps of TestAPI_RealPostgresAndKafka share.
 type journey struct {
 	a           *api
@@ -227,6 +211,8 @@ type journey struct {
 	windowEnd   time.Time
 	from        time.Time
 	apptID      string
+	// the appointments the Kafka-fed steps drive
+	completed, turnedAway, implicit, asnCancelled, legacy string
 }
 
 // TestAPI_RealPostgresAndKafka boots the entry point once and walks the
@@ -237,8 +223,8 @@ func TestAPI_RealPostgresAndKafka(t *testing.T) {
 	kafkatest.CreateTopic(t, outboundkafka.TopicEvents)
 	// The broker has auto-creation OFF, so the analytics topic must exist before the drain.
 	kafkatest.CreateTopic(t, outboundkafka.TopicAnalytics)
+	createConsumedTopics(t)
 	databaseURL := pgtest.URL(t)
-	seedReferenceData(t, databaseURL)
 	a := startAPI(t, databaseURL, brokers)
 
 	waitFor(t, "/readyz to be ready", 30*time.Second, func() bool {
@@ -255,12 +241,15 @@ func TestAPI_RealPostgresAndKafka(t *testing.T) {
 			"asnNumbers": []string{asn}, "expectedSealNumber": "SEAL-77120",
 		},
 	}
+	t.Run("the facility layout and the ASNs arrive through Kafka (a door before its zone is held pending)", j.referenceData)
 	t.Run("a booking writes the aggregate and the outbox rows", j.book)
 	t.Run("the same Idempotency-Key replays the answer and changes nothing", j.replay)
 	t.Run("a stale If-Match is refused and a fresh one cancels", j.cancel)
 	t.Run("an empty no-show sweep answers 200", j.sweep)
 	t.Run("the schedule-adherence report answers the contract shape", j.report)
 	t.Run("the relay publishes the exact CloudEvents to both topics and the outbox drains", j.publishedEvents)
+	t.Run("yard, ASN and legacy facts through Kafka drive the appointments", j.facts)
+	t.Run("the fact-driven transitions publish their events", j.factEvents)
 	t.Run("stopping Kafka turns /readyz into a dependency-unavailable problem", j.kafkaOutage)
 	t.Run("run returns nil within a bound once the context is cancelled, broker or not", j.shutdown)
 }

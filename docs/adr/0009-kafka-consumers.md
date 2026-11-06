@@ -1,8 +1,9 @@
 # 9. Kafka consumers
 
 Status: Accepted. Implements the consuming side of ADR 0003 (consumed contracts and local copies) on top of the `Consume*` use cases
-of ADR 0002 / `internal/application/usecases`. Code: `internal/adapters/inbound/kafka`. No consumer is wired into a `cmd/*` binary by
-this ADR: the composition root calls `kafka.GroupsFromEnv`, `kafka.NewTransport`, `kafka.Build` and `kafka.Start`.
+of ADR 0002 / `internal/application/usecases`. Code: `internal/adapters/inbound/kafka`. `cmd/api` (`consumers.go`) wires all five: it calls
+`kafka.GroupsFromEnv` (through `loadConfig`), `kafka.NewTransport`, `kafka.Build` and `kafka.Start`, passes the one `usecases.Service`
+(real `telemetry.Metrics`, system clock and ids) and stops them after the HTTP drain and before the relay.
 
 ## Consumers
 

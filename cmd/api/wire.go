@@ -68,10 +68,11 @@ func newReadiness(ping func(context.Context) error, brokers []string) *inboundht
 	)
 }
 
-// buildServer wires the use cases into the REST adapter.
-func buildServer(ad adapters, readiness *inboundhttp.Readiness, metrics *telemetry.Metrics) *inboundhttp.Server {
+// buildServer wires the use cases into the REST adapter. svc is the same
+// Service the Kafka consumers drive.
+func buildServer(ad adapters, svc *usecases.Service, readiness *inboundhttp.Readiness, metrics *telemetry.Metrics) *inboundhttp.Server {
 	return &inboundhttp.Server{
-		Service:     usecases.New(ad.deps),
+		Service:     svc,
 		Idempotency: ad.idempotency,
 		UoW:         ad.deps.UoW,
 		Now:         ad.deps.Clock.Now,

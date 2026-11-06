@@ -42,12 +42,15 @@ runtime rules of ADR 0005. Code: `internal/adapters/inbound/http`, `cmd/api`, `i
 - **Report route (D-13).** `GET /reports/schedule-adherence` reads `ports.AdherenceReader` (rows per site and carrier; the adapter adds
   the total and the shares). Without a reader, which is the case until the analytics projector lands (ADR 0006), the route answers the
   contract shape with no rows. The range is mandatory, `from < to`, at most 92 days.
-- **`cmd/api`.** `run(ctx)` -> `runWith(ctx, getenv, onListen)`: load config (a missing `DATABASE_URL` or `KAFKA_BROKERS` is a boot error
-  naming the variable, every missing one at once), run the embedded migrations with the boot retry, open the pool, start the outbox relay,
-  serve. Shutdown order: `/readyz` -> 503, drain delay, HTTP drain, relay stop, Kafka writer close (bounded), pool close. It never imports
-  the in-memory adapters. Metrics: `GET /metrics` serves a private Prometheus registry (Go and process collectors,
-  `dock_scheduling_http_requests_total`, `dock_scheduling_http_request_duration_seconds`, `dock_scheduling_ignored_facts_total`,
-  `dock_scheduling_implicit_arrivals_total`).
+- **`cmd/api`.** `run(ctx)` -> `runWith(ctx, getenv, onListen)`: load config (a missing `DATABASE_URL`, `KAFKA_BROKERS` or mandatory
+  `*_CONSUMER_GROUP` is a boot error naming the variable, every missing one at once), run the embedded migrations with the boot retry,
+  open the pool, build the Kafka consumers (ADR 0009), start the outbox relay and the consumers, serve. Shutdown order: `/readyz` -> 503,
+  drain delay, HTTP drain, consumers stop (their effects enqueue outbox rows), relay stop, Kafka writer close (bounded), pool close
+  last; the process exits non-zero when the relay or the consumers return on their own. It never imports the in-memory adapters.
+  Metrics: `GET /metrics` serves a private Prometheus registry (Go and process collectors, `dock_scheduling_http_requests_total`,
+  `dock_scheduling_http_request_duration_seconds`, `dock_scheduling_ignored_facts_total{reason}`,
+  `dock_scheduling_implicit_arrivals_total`); the same `telemetry.Metrics` is the `ports.Metrics` of the use cases, so the consumers'
+  ignored facts and implicit arrivals are counted in the API's registry. Clock and ids are `internal/adapters/outbound/system`.
 
 ## Assumptions
 
@@ -58,6 +61,8 @@ runtime rules of ADR 0005. Code: `internal/adapters/inbound/http`, `cmd/api`, `i
 - **A23** A malformed path identifier (appointment id, door code, site id) is 400 `invalid-path-parameter`, not 422: it never reaches a
   use case, so it is not a value-object rule of a command. The same door code in a request BODY is 422 `invalid-door-code`.
 - **A24** `POST /no-show-sweeps` keeps the `Idempotency-Key` requirement of the contract. A CronJob sends one key per run.
-- **A25** The Kafka consumers (ASN, layout, yard facts, legacy import) and their `*_CONSUMER_GROUP` variables are wired by a later step
-  into the same `cmd/api`; until then the local copies fill only through tests, and a booking of an unknown door is 422 `unknown-door`.
+- **A25** The Kafka consumers (yard facts, facility layout, ASN, CPT cutoffs and the optional legacy importer) run inside `cmd/api`
+  next to the relay (ADR 0009); their groups are `YARD_CONSUMER_GROUP`, `FACILITY_CONSUMER_GROUP`, `ASN_CONSUMER_GROUP`,
+  `CPT_CONSUMER_GROUP` (mandatory) and `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` (unset = importer off). A booking of a door that no
+  facility event announced is 422 `unknown-door`. The real-wiring test feeds doors, ASNs and yard facts through Kafka only.
 - **A26** CORS is not configured: the API is cluster-internal behind the gateway (fleet decision 2026-09-11, no auth layer).
