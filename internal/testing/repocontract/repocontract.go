@@ -37,7 +37,7 @@ type Factory func(t *testing.T) Env
 func Run(t *testing.T, f Factory) {
 	t.Helper()
 	for name, fn := range map[string]func(*testing.T, Factory){
-		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
+		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "legacy-backstops": runLegacyBackstops, "door-override": runDoorOverride, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
 		"calendar-updates": runCalendarUpdates, "doors": runDoors, "door-updates": runDoorUpdates, "asns": runAsns, "cutoffs": runCutoffs, "claims": runClaims, "idempotency": runIdempotency, "rollback": runRollback,
 	} {
 		t.Run(name, func(t *testing.T) { fn(t, f) })
@@ -211,6 +211,47 @@ func runEndedAndLock(t *testing.T, f Factory) {
 	}
 	if err := e.Appointments.LockDoor(ctx, "D1"); err != nil {
 		t.Fatalf("LockDoor: %v", err)
+	}
+}
+
+// runLegacyBackstops: a legacy import enforces neither the door overlap nor the
+// ASN uniqueness (D-2), so the storage backstops must not refuse it.
+func runLegacyBackstops(t *testing.T, f Factory) {
+	e := f(t)
+	mustSave(t, e, book(t, 1, "D1", 0, "ASN-A"), 0)
+	imp, _, err := dockappointment.ImportLegacy(dockappointment.LegacyParams{
+		ID: apptID(2), SiteID: "WH1", DoorCode: "D1", Carrier: "ACME", WindowStart: base, WindowEnd: base.Add(time.Hour),
+		ASNNumbers: []string{"ASN-A"}, Now: base,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, e, imp, 0)
+	got, err := e.Appointments.Get(context.Background(), apptID(2))
+	if err != nil || got.Snapshot().Provenance != dockappointment.LegacyImport {
+		t.Fatalf("legacy import = %+v, %v", got, err)
+	}
+	// a native booking is still refused against the native one
+	if err := e.Appointments.Save(context.Background(), book(t, 3, "D1", 0, "ASN-Z"), 0); !errors.Is(err, dockappointment.ErrDoorDoubleBooked) {
+		t.Fatalf("native overlap: %v", err)
+	}
+}
+
+// runDoorOverride: an appointment whose door was set by a physical fact is exempt from the overlap backstop.
+func runDoorOverride(t *testing.T, f Factory) {
+	ctx := context.Background()
+	e := f(t)
+	mustSave(t, e, book(t, 1, "D1", 0, "ASN-A"), 0)
+	moved := book(t, 2, "D2", 0, "ASN-B")
+	mustSave(t, e, moved, 0)
+	got, _ := e.Appointments.Get(ctx, apptID(2))
+	if _, err := got.ReassignDoor("D1", base); err != nil {
+		t.Fatal(err)
+	}
+	mustSave(t, e, got, 1)
+	again, err := e.Appointments.Get(ctx, apptID(2))
+	if err != nil || again.DoorCode() != "D1" || !again.DoorOverride() {
+		t.Fatalf("reassigned = %+v, %v", again, err)
 	}
 }
 

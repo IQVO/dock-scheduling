@@ -1,0 +1,19 @@
+{
+  "specversion": "1.0",
+  "id": "f3e2d1c0-9b8a-4c5d-8e7f-8a9b0c1d2e3f",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentAtRisk",
+  "subject": "appt-123e4567-e89b-12d3-a456-426614174000",
+  "time": "2026-11-06T07:30:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:DockAppointmentAtRisk:v1",
+  "data": {
+    "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000",
+    "site_id": "WH1",
+    "door_code": "WH1-DOCK-IN-01",
+    "eta_at": "2026-11-06T09:10:00Z",
+    "window_start": "2026-11-06T08:00:00Z",
+    "window_end": "2026-11-06T10:00:00Z",
+    "cause": "LATE_ETA"
+  }
+}

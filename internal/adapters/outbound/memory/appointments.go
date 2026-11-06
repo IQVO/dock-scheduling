@@ -35,15 +35,16 @@ func (a appts) Save(ctx context.Context, ap *dockappointment.DockAppointment, ex
 	return err
 }
 
-// checkBackstops mimics the storage constraints: the door exclusion (native
-// appointments) and the ASN uniqueness.
+// checkBackstops mimics the storage constraints: the door exclusion (native,
+// non-override appointments) and the ASN uniqueness (native appointments).
 func (a appts) checkBackstops(snap dockappointment.Snapshot) error {
 	for id, o := range a.s.st.appointments {
 		if id == snap.ID || !o.State.Active() {
 			continue
 		}
 		overlap := o.DoorCode == snap.DoorCode && o.WindowStart.Before(snap.WindowEnd) && snap.WindowStart.Before(o.WindowEnd)
-		if overlap && !snap.DoorOverride && !o.DoorOverride {
+		exempt := snap.DoorOverride || o.DoorOverride || snap.Provenance != dockappointment.Native || o.Provenance != dockappointment.Native
+		if overlap && !exempt {
 			return dockappointment.ErrDoorDoubleBooked
 		}
 		if snap.Provenance == dockappointment.Native && o.Provenance == dockappointment.Native && shareAsn(o.ASNNumbers, snap.ASNNumbers) {
