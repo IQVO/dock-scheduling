@@ -54,7 +54,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	p := problemFor(err)
 	detail := err.Error()
 	if p == internalProblem {
-		slog.ErrorContext(r.Context(), "request failed", "error", err, "method", sanitizeLog(r.Method), "path", sanitizeLog(r.URL.Path))
+		slog.ErrorContext(r.Context(), "request failed", "error", err, "method", logReplacer.Replace(r.Method), "path", logReplacer.Replace(r.URL.Path))
 		detail = "an unexpected error occurred"
 	}
 	writeProblem(w, r, p, detail)
@@ -69,12 +69,10 @@ func writeProblem(w http.ResponseWriter, r *http.Request, p problem, detail stri
 	})
 }
 
-// logReplacer strips the characters that let a value forge a log line.
+// logReplacer strips the characters that let a value forge a log line. It is
+// applied DIRECTLY at each sink: CodeQL's taint tracking does not follow a
+// package-local wrapper, so the sanitizer must sit on the logged value itself.
 var logReplacer = strings.NewReplacer("\r", "", "\n", "")
-
-// sanitizeLog removes CR and LF from a value that came off the wire before it
-// is logged or put in an error that will be (CodeQL go/log-injection).
-func sanitizeLog(s string) string { return logReplacer.Replace(s) }
 
 // errMalformedRequest marks a body or parameter the adapter itself rejects
 // (bad JSON, unknown field, wrong type, empty body).
