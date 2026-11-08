@@ -23,7 +23,7 @@ decodes, calls ONE method of `usecases.Service` and maps the view to a DTO (`dto
 - `POST /sites/{siteId}/dock-calendar/closures` -> `ScheduleDoorClosure`
 - `POST /sites/{siteId}/dock-calendar/closures/{closureId}/lifts` -> `LiftDoorClosure`
 - `POST /no-show-sweeps` -> `RunNoShowSweep` (cron; one transaction per appointment, so the key middleware runs it DETACHED)
-- `GET /reports/schedule-adherence` -> the `ports.AdherenceReader` read side (`reports.go`); without one it answers the contract shape with no rows (D-13)
+- The reports are NOT routes of this router: `GET /reports/schedule-adherence` and `GET /reports/freshness` are served by the separate `cmd/reports` binary over the analytical database, specified in `apis/openapi-reports.yaml` (ADR 0006; the shared handlers live in `reports.go` / `reports_router.go`).
 - `GET /healthz` (liveness), `GET /readyz` (`readiness.go`: drain gate + Postgres ping + Kafka metadata), `GET /metrics` (Prometheus, built in `cmd/api`)
 
 Arrival and door release are NOT REST routes: they are yard facts the Kafka consumers apply (ADR 0003).

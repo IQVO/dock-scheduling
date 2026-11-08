@@ -9,9 +9,9 @@ argument-hint: "[git range]"
 
 Perform a ubiquitous-language drift review of the current changes (or
 `$ARGUMENTS` if given), comparing new/changed code against
-`.claude/rules/domain-model.md` (or this repo's equivalent doc — check
-`AGENTS.md`/`CLAUDE.md` for where the ubiquitous language lives if that
-file doesn't exist here).
+`.claude/rules/domain-model.md` (this repo's ubiquitous-language page;
+`docs/adr/0002-aggregates-invariants-and-assumptions.md` holds the term
+glossary behind it).
 
 Ubiquitous language drift is the quiet failure mode DDD is supposed to
 prevent: code that technically works but silently renames, reshapes, or

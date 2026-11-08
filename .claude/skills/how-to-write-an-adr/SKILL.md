@@ -15,11 +15,11 @@ addition inside an already-decided architecture doesn't.
 
 ## Numbering and location
 
-`docs/docs/adr/NNNN-kebab-case-title.md`, four-digit zero-padded,
+`docs/adr/NNNN-kebab-case-title.md`, four-digit zero-padded,
 sequential — check the highest existing number
-(`git ls-tree --name-only origin/develop -- docs/docs/adr/` and pick the
-next integer, never reuse or guess). `docs/docs/adr/about.md` explains the
-format to readers; you don't need to touch it when adding a new ADR.
+(`git ls-tree --name-only origin/develop -- docs/adr/` and pick the
+next integer, never reuse or guess). `docs/adr/index.md` explains the
+set to readers; add the new ADR's row there when you add one.
 
 ## Frontmatter (Docusaurus needs all five fields)
 
@@ -70,11 +70,12 @@ lists benefits reads as marketing, not a decision record.
 ```
 
 The `## Decision` section is the part worth the most editing effort: see
-ADR-0013 (`docs/docs/adr/0013-location-classification-via-facility-events.md`)
-for a model example — it states the exact mechanism (event-fed local
-cache replacing a synchronous HTTP read), names the readiness-gate design,
-and is specific enough that Task "how-to-add-an-integration-event"'s
-consumer-group guidance can point straight at it.
+ADR-0006 (`docs/adr/0006-analytics-read-side.md`)
+for a model example — it states the exact mechanism (outbox-fed analytics
+topic, separate projector and reports binaries over their own database),
+names the trade-offs (a second database to operate against zero load on
+the OLTP side), and is specific enough that the reports contract's
+consumers can point straight at it.
 
 ## Superseding an earlier ADR
 

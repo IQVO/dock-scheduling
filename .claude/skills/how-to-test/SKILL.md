@@ -22,7 +22,8 @@ assert nothing.
    `./internal/domain/...,./internal/application/...`) — proves lines
    executed. Proves nothing about whether the test asserted the right
    thing.
-3. **Mutation testing** (`make mutation-fast`, gremlins) — proves the
+3. **Mutation testing** (`make mutation`, gremlins; CI's `mutation-fast`
+   job) — proves the
    tests actually ASSERT, not merely execute. A mutant is a deliberately
    broken version of the code (`<` -> `<=`, `+` -> `-`, etc.); if the test
    suite still passes against the mutant, it "survived" (LIVED) — meaning
@@ -104,7 +105,7 @@ test per technology enforces it (`TestKafkaIntegrationTestsUseTestcontainers`,
 `TestPostgresIntegrationTestsUseTestcontainers`). Share one container per
 package through a helper (e.g. an `outboxDB(t)` that runs
 `tcpostgres.Run` -> `ConnectionString` -> migrate -> pool -> `t.Cleanup`). See
-`internal/adapters/outbound/facilitycache/consumer_integration_test.go`
+`internal/adapters/inbound/kafka/consumers_integration_test.go`
 for the working recipe (unique topic per test, one shared container per
 package, explicit `CreateTopics` + poll for the partition leader before
 the first read/write).
