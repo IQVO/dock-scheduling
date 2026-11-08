@@ -1,0 +1,2114 @@
+[
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Book a dock door window for one carrier visit. INBOUND needs at least one known, not cancelled asnNumbers entry; OUTBOUND needs a known cptId or shipmentRefs. The window is half-open [windowStart, windowEnd), on the site's slot granularity, not in the past, inside the door's operating hours and outside its closures, and may not overlap another BOOKED or CHECKED_IN appointment of the door. Refused with a typed error otherwise (door-double-booked, door-unavailable, unknown-asn, asn-already-scheduled, window-in-past, ...). Check get_door_availability first. Needs an idempotencyKey: retry with the same key and arguments to get the same answer, never a second booking.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "asnNumbers": {
+          "description": "INBOUND: the ASN numbers the visit delivers (at least one, each known and not cancelled, each on no other active appointment); optional for OUTBOUND",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "carrier": {
+          "description": "carrier name, 1..100 characters",
+          "type": "string"
+        },
+        "carrierScac": {
+          "description": "optional carrier SCAC, 2..4 upper-case letters",
+          "type": "string"
+        },
+        "cptId": {
+          "description": "optional for INBOUND; OUTBOUND: a cutoff id known for the site (alternative to shipmentRefs)",
+          "type": "string"
+        },
+        "direction": {
+          "description": "INBOUND or OUTBOUND",
+          "type": "string"
+        },
+        "doorCode": {
+          "description": "the dock door to book; its flow must allow the direction",
+          "type": "string"
+        },
+        "expectedSealNumber": {
+          "description": "optional seal number the carrier declares; the yard compares it at the gate",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "shipmentRefs": {
+          "description": "OUTBOUND: the shipments the visit picks up (alternative to cptId); optional for INBOUND",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "windowEnd": {
+          "description": "RFC 3339 end of the window (exclusive), after the start and at most the site's max window",
+          "type": "string"
+        },
+        "windowStart": {
+          "description": "RFC 3339 start of the window; on the site's slot granularity and not in the past",
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "doorCode",
+        "carrier",
+        "windowStart",
+        "windowEnd",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "book_appointment",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointment": {
+          "additionalProperties": false,
+          "properties": {
+            "appointmentId": {
+              "type": "string"
+            },
+            "arrival": {
+              "additionalProperties": false,
+              "properties": {
+                "checkedInAt": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "implicit": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "visitId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "checkedInAt",
+                "status",
+                "visitId",
+                "implicit"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "asnNumbers": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "atRisk": {
+              "type": "boolean"
+            },
+            "atRiskCause": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cancellationReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "carrier": {
+              "type": "string"
+            },
+            "carrierScac": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "completedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cptId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string"
+            },
+            "doorCode": {
+              "type": "string"
+            },
+            "eta": {
+              "additionalProperties": false,
+              "properties": {
+                "etaAt": {
+                  "type": "string"
+                },
+                "reportedAt": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "etaAt",
+                "reportedAt",
+                "source"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "expectedSealNumber": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "provenance": {
+              "type": "string"
+            },
+            "shipmentRefs": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "siteId": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer"
+            },
+            "windowEnd": {
+              "type": "string"
+            },
+            "windowStart": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appointmentId",
+            "siteId",
+            "direction",
+            "doorCode",
+            "carrier",
+            "carrierScac",
+            "windowStart",
+            "windowEnd",
+            "asnNumbers",
+            "cptId",
+            "shipmentRefs",
+            "expectedSealNumber",
+            "provenance",
+            "state",
+            "version",
+            "eta",
+            "arrival",
+            "atRisk",
+            "atRiskCause",
+            "completedAt",
+            "cancellationReason",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "atRisk": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "appointment",
+        "atRisk",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Cancel a BOOKED or CHECKED_IN appointment and free its door window. reason is CARRIER_REQUEST or SITE_REQUEST (the other reasons are set by policies, never by a caller). Pass expectedVersion to guard against a concurrent change. Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "appointmentId": {
+          "description": "the BOOKED or CHECKED_IN appointment to cancel, appt-\u003cuuid\u003e",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "optional version from get_appointment; the change is refused (precondition-failed) if the appointment is at another version now",
+          "type": "integer"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "reason": {
+          "description": "CARRIER_REQUEST or SITE_REQUEST",
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointmentId",
+        "reason",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "cancel_appointment",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointment": {
+          "additionalProperties": false,
+          "properties": {
+            "appointmentId": {
+              "type": "string"
+            },
+            "arrival": {
+              "additionalProperties": false,
+              "properties": {
+                "checkedInAt": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "implicit": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "visitId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "checkedInAt",
+                "status",
+                "visitId",
+                "implicit"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "asnNumbers": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "atRisk": {
+              "type": "boolean"
+            },
+            "atRiskCause": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cancellationReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "carrier": {
+              "type": "string"
+            },
+            "carrierScac": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "completedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cptId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string"
+            },
+            "doorCode": {
+              "type": "string"
+            },
+            "eta": {
+              "additionalProperties": false,
+              "properties": {
+                "etaAt": {
+                  "type": "string"
+                },
+                "reportedAt": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "etaAt",
+                "reportedAt",
+                "source"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "expectedSealNumber": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "provenance": {
+              "type": "string"
+            },
+            "shipmentRefs": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "siteId": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer"
+            },
+            "windowEnd": {
+              "type": "string"
+            },
+            "windowStart": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appointmentId",
+            "siteId",
+            "direction",
+            "doorCode",
+            "carrier",
+            "carrierScac",
+            "windowStart",
+            "windowEnd",
+            "asnNumbers",
+            "cptId",
+            "shipmentRefs",
+            "expectedSealNumber",
+            "provenance",
+            "state",
+            "version",
+            "eta",
+            "arrival",
+            "atRisk",
+            "atRiskCause",
+            "completedAt",
+            "cancellationReason",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "atRisk": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "appointment",
+        "atRisk",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read one dock appointment by id (appt-\u003cuuid\u003e): door, window, carrier, ASNs or CPT/shipment references, state, latest ETA, recorded arrival, atRisk with its cause, and the version to pass as expectedVersion on a change.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointmentId": {
+          "description": "the appointment id, appt-\u003cuuid\u003e",
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointmentId"
+      ],
+      "type": "object"
+    },
+    "name": "get_appointment",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointmentId": {
+          "type": "string"
+        },
+        "arrival": {
+          "additionalProperties": false,
+          "properties": {
+            "checkedInAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "implicit": {
+              "type": "boolean"
+            },
+            "status": {
+              "type": "string"
+            },
+            "visitId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          },
+          "required": [
+            "checkedInAt",
+            "status",
+            "visitId",
+            "implicit"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "asnNumbers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "atRisk": {
+          "type": "boolean"
+        },
+        "atRiskCause": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cancellationReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "carrier": {
+          "type": "string"
+        },
+        "carrierScac": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "completedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "cptId": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "doorCode": {
+          "type": "string"
+        },
+        "eta": {
+          "additionalProperties": false,
+          "properties": {
+            "etaAt": {
+              "type": "string"
+            },
+            "reportedAt": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "etaAt",
+            "reportedAt",
+            "source"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "expectedSealNumber": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "provenance": {
+          "type": "string"
+        },
+        "shipmentRefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "siteId": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "windowEnd": {
+          "type": "string"
+        },
+        "windowStart": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointmentId",
+        "siteId",
+        "direction",
+        "doorCode",
+        "carrier",
+        "carrierScac",
+        "windowStart",
+        "windowEnd",
+        "asnNumbers",
+        "cptId",
+        "shipmentRefs",
+        "expectedSealNumber",
+        "provenance",
+        "state",
+        "version",
+        "eta",
+        "arrival",
+        "atRisk",
+        "atRiskCause",
+        "completedAt",
+        "cancellationReason",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "A site's door calendar with defaults applied: booking settings (max window, slot granularity, arrival tolerance, no-show grace), door operating hours (none declared = open 24x7) and the active closures.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "siteId": {
+          "description": "the site code (facility-layout siteCode)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "siteId"
+      ],
+      "type": "object"
+    },
+    "name": "get_dock_calendar",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "closures": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "closureId": {
+                "type": "string"
+              },
+              "doorCode": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "lifted": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "siteId": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "closureId",
+              "siteId",
+              "doorCode",
+              "from",
+              "to",
+              "reason",
+              "lifted"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "operatingHours": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "closesAt": {
+                "type": "string"
+              },
+              "doorCode": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "opensAt": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "weekday": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "doorCode",
+              "weekday",
+              "opensAt",
+              "closesAt",
+              "timezone"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "settings": {
+          "additionalProperties": false,
+          "properties": {
+            "arrivalToleranceMinutes": {
+              "type": "integer"
+            },
+            "maxWindowMinutes": {
+              "type": "integer"
+            },
+            "noShowGraceMinutes": {
+              "type": "integer"
+            },
+            "slotGranularityMinutes": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "maxWindowMinutes",
+            "slotGranularityMinutes",
+            "arrivalToleranceMinutes",
+            "noShowGraceMinutes"
+          ],
+          "type": "object"
+        },
+        "siteId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "siteId",
+        "version",
+        "settings",
+        "operatingHours",
+        "closures"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Free and busy windows of one dock door inside [from, to) (RFC 3339, at most 14 days). Free windows respect the site's operating hours and closures and are cut to `minutes` (1..240; default the site's slot granularity). Look here before booking.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "doorCode": {
+          "description": "the dock door code",
+          "type": "string"
+        },
+        "from": {
+          "description": "RFC 3339 start of the range",
+          "type": "string"
+        },
+        "minutes": {
+          "description": "optional length of each free window in minutes, 1..240 (default the site's slot granularity)",
+          "type": "integer"
+        },
+        "to": {
+          "description": "RFC 3339 end of the range, after from and at most 14 days later",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doorCode",
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "name": "get_door_availability",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "busy": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "type": "string"
+              },
+              "kind": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "ref": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "start": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "kind",
+              "ref"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "doorCode": {
+          "type": "string"
+        },
+        "freeWindows": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "type": "string"
+              },
+              "kind": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "ref": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "start": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "kind",
+              "ref"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "from": {
+          "type": "string"
+        },
+        "granularityMinutes": {
+          "type": "integer"
+        },
+        "siteId": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "doorCode",
+        "siteId",
+        "from",
+        "to",
+        "granularityMinutes",
+        "freeWindows",
+        "busy"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Page through dock appointments ordered by window start (at most 500 per page; follow nextCursor). Every filter is optional: siteId, doorCode, state (BOOKED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW), direction (INBOUND, OUTBOUND), carrierScac, atRisk=true (only appointments flagged at risk) and from/to (RFC 3339; appointments whose window overlaps [from, to)).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "atRisk": {
+          "description": "optional; true lists only appointments flagged at risk",
+          "type": "boolean"
+        },
+        "carrierScac": {
+          "description": "optional carrier SCAC to narrow to",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "optional nextCursor of the previous page",
+          "type": "string"
+        },
+        "direction": {
+          "description": "optional direction: INBOUND or OUTBOUND",
+          "type": "string"
+        },
+        "doorCode": {
+          "description": "optional dock door code to narrow to",
+          "type": "string"
+        },
+        "from": {
+          "description": "optional RFC 3339 start of the range; with to, appointments whose window overlaps [from, to)",
+          "type": "string"
+        },
+        "limit": {
+          "description": "optional page size 1..500 (default 100)",
+          "type": "integer"
+        },
+        "siteId": {
+          "description": "optional site code to narrow to",
+          "type": "string"
+        },
+        "state": {
+          "description": "optional state: BOOKED, CHECKED_IN, COMPLETED, CANCELLED or NO_SHOW",
+          "type": "string"
+        },
+        "to": {
+          "description": "optional RFC 3339 end of the range",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_appointments",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "appointmentId": {
+                "type": "string"
+              },
+              "arrival": {
+                "additionalProperties": false,
+                "properties": {
+                  "checkedInAt": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "implicit": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "visitId": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  }
+                },
+                "required": [
+                  "checkedInAt",
+                  "status",
+                  "visitId",
+                  "implicit"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "asnNumbers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "atRisk": {
+                "type": "boolean"
+              },
+              "atRiskCause": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "cancellationReason": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "carrier": {
+                "type": "string"
+              },
+              "carrierScac": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "completedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "cptId": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string"
+              },
+              "doorCode": {
+                "type": "string"
+              },
+              "eta": {
+                "additionalProperties": false,
+                "properties": {
+                  "etaAt": {
+                    "type": "string"
+                  },
+                  "reportedAt": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "etaAt",
+                  "reportedAt",
+                  "source"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "expectedSealNumber": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "shipmentRefs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "siteId": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "windowEnd": {
+                "type": "string"
+              },
+              "windowStart": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "appointmentId",
+              "siteId",
+              "direction",
+              "doorCode",
+              "carrier",
+              "carrierScac",
+              "windowStart",
+              "windowEnd",
+              "asnNumbers",
+              "cptId",
+              "shipmentRefs",
+              "expectedSealNumber",
+              "provenance",
+              "state",
+              "version",
+              "eta",
+              "arrival",
+              "atRisk",
+              "atRiskCause",
+              "completedAt",
+              "cancellationReason",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "BOOKED appointments flagged at risk: the carrier's latest ETA is later than window start plus the arrival tolerance (cause LATE_ETA) or the physical door overlaps a later booking (DOOR_REASSIGNED_OVERLAP). Advisory: nothing reschedules automatically. Optionally narrowed to one site; paged like list_appointments.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "description": "optional nextCursor of the previous page",
+          "type": "string"
+        },
+        "limit": {
+          "description": "optional page size 1..500 (default 100)",
+          "type": "integer"
+        },
+        "siteId": {
+          "description": "optional site code to narrow to",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_at_risk_appointments",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "appointmentId": {
+                "type": "string"
+              },
+              "arrival": {
+                "additionalProperties": false,
+                "properties": {
+                  "checkedInAt": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "implicit": {
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "visitId": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  }
+                },
+                "required": [
+                  "checkedInAt",
+                  "status",
+                  "visitId",
+                  "implicit"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "asnNumbers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "atRisk": {
+                "type": "boolean"
+              },
+              "atRiskCause": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "cancellationReason": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "carrier": {
+                "type": "string"
+              },
+              "carrierScac": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "completedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "cptId": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string"
+              },
+              "doorCode": {
+                "type": "string"
+              },
+              "eta": {
+                "additionalProperties": false,
+                "properties": {
+                  "etaAt": {
+                    "type": "string"
+                  },
+                  "reportedAt": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "etaAt",
+                  "reportedAt",
+                  "source"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "expectedSealNumber": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "provenance": {
+                "type": "string"
+              },
+              "shipmentRefs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "siteId": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "windowEnd": {
+                "type": "string"
+              },
+              "windowStart": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "appointmentId",
+              "siteId",
+              "direction",
+              "doorCode",
+              "carrier",
+              "carrierScac",
+              "windowStart",
+              "windowEnd",
+              "asnNumbers",
+              "cptId",
+              "shipmentRefs",
+              "expectedSealNumber",
+              "provenance",
+              "state",
+              "version",
+              "eta",
+              "arrival",
+              "atRisk",
+              "atRiskCause",
+              "completedAt",
+              "cancellationReason",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Record the carrier's latest estimated arrival on a BOOKED appointment. An etaAt later than the window start plus the site's arrival tolerance flags the appointment at risk once for this report (atRisk=true in the answer); nothing is rescheduled. Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "appointmentId": {
+          "description": "the BOOKED appointment the carrier is on the way to, appt-\u003cuuid\u003e",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "etaAt": {
+          "description": "RFC 3339 estimated arrival",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "source": {
+          "description": "optional label of where the ETA came from, at most 64 characters (default mcp)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointmentId",
+        "etaAt",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "report_eta",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointment": {
+          "additionalProperties": false,
+          "properties": {
+            "appointmentId": {
+              "type": "string"
+            },
+            "arrival": {
+              "additionalProperties": false,
+              "properties": {
+                "checkedInAt": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "implicit": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "visitId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "checkedInAt",
+                "status",
+                "visitId",
+                "implicit"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "asnNumbers": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "atRisk": {
+              "type": "boolean"
+            },
+            "atRiskCause": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cancellationReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "carrier": {
+              "type": "string"
+            },
+            "carrierScac": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "completedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cptId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string"
+            },
+            "doorCode": {
+              "type": "string"
+            },
+            "eta": {
+              "additionalProperties": false,
+              "properties": {
+                "etaAt": {
+                  "type": "string"
+                },
+                "reportedAt": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "etaAt",
+                "reportedAt",
+                "source"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "expectedSealNumber": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "provenance": {
+              "type": "string"
+            },
+            "shipmentRefs": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "siteId": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer"
+            },
+            "windowEnd": {
+              "type": "string"
+            },
+            "windowStart": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appointmentId",
+            "siteId",
+            "direction",
+            "doorCode",
+            "carrier",
+            "carrierScac",
+            "windowStart",
+            "windowEnd",
+            "asnNumbers",
+            "cptId",
+            "shipmentRefs",
+            "expectedSealNumber",
+            "provenance",
+            "state",
+            "version",
+            "eta",
+            "arrival",
+            "atRisk",
+            "atRiskCause",
+            "completedAt",
+            "cancellationReason",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "atRisk": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "appointment",
+        "atRisk",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Move a BOOKED appointment to a new window and/or door (omit doorCode to keep the door). The same checks as a booking apply to the new door and window. Pass expectedVersion (from get_appointment) to refuse the change if someone else changed the appointment meanwhile (precondition-failed). Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "appointmentId": {
+          "description": "the BOOKED appointment to move, appt-\u003cuuid\u003e",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "doorCode": {
+          "description": "optional new door; omit to keep the current door",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "optional version from get_appointment; the change is refused (precondition-failed) if the appointment is at another version now",
+          "type": "integer"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "windowEnd": {
+          "description": "RFC 3339 end of the new window (exclusive)",
+          "type": "string"
+        },
+        "windowStart": {
+          "description": "RFC 3339 start of the new window",
+          "type": "string"
+        }
+      },
+      "required": [
+        "appointmentId",
+        "windowStart",
+        "windowEnd",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "reschedule_appointment",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appointment": {
+          "additionalProperties": false,
+          "properties": {
+            "appointmentId": {
+              "type": "string"
+            },
+            "arrival": {
+              "additionalProperties": false,
+              "properties": {
+                "checkedInAt": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "implicit": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "visitId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "required": [
+                "checkedInAt",
+                "status",
+                "visitId",
+                "implicit"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "asnNumbers": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "atRisk": {
+              "type": "boolean"
+            },
+            "atRiskCause": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cancellationReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "carrier": {
+              "type": "string"
+            },
+            "carrierScac": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "completedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "cptId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            },
+            "direction": {
+              "type": "string"
+            },
+            "doorCode": {
+              "type": "string"
+            },
+            "eta": {
+              "additionalProperties": false,
+              "properties": {
+                "etaAt": {
+                  "type": "string"
+                },
+                "reportedAt": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "etaAt",
+                "reportedAt",
+                "source"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "expectedSealNumber": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "provenance": {
+              "type": "string"
+            },
+            "shipmentRefs": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "siteId": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer"
+            },
+            "windowEnd": {
+              "type": "string"
+            },
+            "windowStart": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appointmentId",
+            "siteId",
+            "direction",
+            "doorCode",
+            "carrier",
+            "carrierScac",
+            "windowStart",
+            "windowEnd",
+            "asnNumbers",
+            "cptId",
+            "shipmentRefs",
+            "expectedSealNumber",
+            "provenance",
+            "state",
+            "version",
+            "eta",
+            "arrival",
+            "atRisk",
+            "atRiskCause",
+            "completedAt",
+            "cancellationReason",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "atRisk": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "appointment",
+        "atRisk",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  }
+]

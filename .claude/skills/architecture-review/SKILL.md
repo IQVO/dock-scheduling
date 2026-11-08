@@ -27,7 +27,8 @@ check a design decision against this fleet's standing architecture.
 2. **Customer/Supplier direction, per `.claude/rules/domain-model.md`
    (or this repo's equivalent doc).** A new outbound call to a sibling
    context must go the direction ADRs already established — check
-   `docs/docs/adr/` for the relevant context-mapping ADR before assuming
+   `docs/adr/` for the relevant context-mapping ADR (e.g.
+   `docs/adr/0003-consumed-contracts-and-local-copies.md`) before assuming
    a new integration is fine. Flag any outbound call added to a context
    this repo doesn't already integrate with; that's a new architectural
    decision that needs its own ADR, not a code change slipped in

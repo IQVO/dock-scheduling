@@ -90,8 +90,9 @@ Three traps, in order of how much time they cost when hit blind:
      -t warehouse/<context>-frontend:local .
    ```
 
-See this repo's own `web/Dockerfile` for the complete, working, heavily
-commented recipe — copy it rather than re-deriving these three traps from
+The complete, working, heavily commented recipe lives in a sibling that
+already has a remote (the inbound-receiving repository's frontend build
+files) — copy it rather than re-deriving these three traps from
 scratch for a new remote.
 
 ## Wiring into `warehouse-infra`'s deploy

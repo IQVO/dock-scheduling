@@ -1,0 +1,110 @@
+{{- if .Values.relay.enabled }}
+{{- include "dock-scheduling.requireDatabase" . -}}
+{{- include "dock-scheduling.requireKafka" . -}}
+{{- /* The relay's tuning knobs fall back to the api's config.outbox* values
+when unset (empty), so the two relays stay in step unless deliberately
+split. An explicit 0 (unlimited attempts) must survive the fallback, which
+Helm's `default` would swallow -- hence the toString comparison. */ -}}
+{{- $interval := .Values.relay.outboxRelayInterval }}{{- if eq (toString $interval) "" }}{{- $interval = .Values.config.outboxRelayInterval }}{{- end }}
+{{- $batch := .Values.relay.outboxBatchSize }}{{- if eq (toString $batch) "" }}{{- $batch = .Values.config.outboxBatchSize }}{{- end }}
+{{- $attempts := .Values.relay.outboxMaxAttempts }}{{- if eq (toString $attempts) "" }}{{- $attempts = .Values.config.outboxMaxAttempts }}{{- end }}
+{{- /*
+The dedicated outbox relay (cmd/relay), OPTIONAL beside cmd/api's inline
+relay: both drain the same outbox safely because claims run under
+FOR UPDATE SKIP LOCKED, so two relays claim disjoint row sets. This
+Deployment exists to scale the drain (or isolate its retries) without
+scaling the api. It serves ONLY GET /healthz on ADMIN_ADDR (8094) for the
+kubelet; no Service routes to it. It never runs migrations: the schema
+belongs to the api's boot.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dock-scheduling.relayFullname" . }}
+  labels:
+    {{- include "dock-scheduling.labels" . | nindent 4 }}
+    app.kubernetes.io/component: relay
+spec:
+  replicas: {{ .Values.relay.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dock-scheduling.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: relay
+  template:
+    metadata:
+      labels:
+        {{- include "dock-scheduling.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: relay
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "dock-scheduling.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: relay
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "dock-scheduling.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/relay"]
+          ports:
+            - name: admin
+              containerPort: 8094
+              protocol: TCP
+          # Env contract verified against cmd/relay/config.go: DATABASE_URL
+          # (required), KAFKA_BROKERS (required), ADMIN_ADDR (default :8094),
+          # OUTBOX_RELAY_INTERVAL / OUTBOX_BATCH_SIZE / OUTBOX_MAX_ATTEMPTS
+          # (each defaulting inside the binary). No MIGRATIONS_DATABASE_URL:
+          # the relay never migrates.
+          env:
+            - name: ADMIN_ADDR
+              value: {{ .Values.relay.adminAddr | quote }}
+            - name: OUTBOX_RELAY_INTERVAL
+              value: {{ $interval | quote }}
+            - name: OUTBOX_BATCH_SIZE
+              value: {{ $batch | quote }}
+            - name: OUTBOX_MAX_ATTEMPTS
+              value: {{ $attempts | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dock-scheduling.databaseSecretName" . }}
+                  key: {{ .Values.database.existingSecretKey }}
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.brokers | quote }}
+            {{- range .Values.relay.extraEnv }}
+            - {{ toYaml . | nindent 14 | trim }}
+            {{- end }}
+          # The probe server is up before the relay loop starts; liveness is
+          # the loop itself (the process exits non-zero when the relay
+          # returns on its own, so the orchestrator restarts it).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.relay.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

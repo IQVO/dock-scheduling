@@ -1,0 +1,36 @@
+# Non-secret configuration of the api component, mirrored from the env the
+# Deployment renders; the Deployment's checksum/config annotation rolls the
+# pods whenever any of it changes. DATABASE_URL never lands here: it lives in
+# the Secret (templates/secret.yaml or database.existingSecret).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dock-scheduling.fullname" . }}
+  labels:
+    {{- include "dock-scheduling.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+data:
+  HTTP_ADDR: {{ .Values.config.httpAddr | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  ENVIRONMENT: {{ .Values.environment | quote }}
+  YARD_CONSUMER_GROUP: {{ .Values.config.yardConsumerGroup | quote }}
+  FACILITY_CONSUMER_GROUP: {{ .Values.config.facilityConsumerGroup | quote }}
+  ASN_CONSUMER_GROUP: {{ .Values.config.asnConsumerGroup | quote }}
+  CPT_CONSUMER_GROUP: {{ .Values.config.cptConsumerGroup | quote }}
+  {{- with .Values.config.dockLegacyImportConsumerGroup }}
+  DOCK_LEGACY_IMPORT_CONSUMER_GROUP: {{ . | quote }}
+  {{- end }}
+  OUTBOX_MAX_ATTEMPTS: {{ .Values.config.outboxMaxAttempts | quote }}
+  {{- with .Values.config.outboxRelayInterval }}
+  OUTBOX_RELAY_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.outboxBatchSize }}
+  OUTBOX_BATCH_SIZE: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.shutdownDrainDelay }}
+  SHUTDOWN_DRAIN_DELAY: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.otel.enabled }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.otel.endpoint | quote }}
+  {{- end }}
+  KAFKA_BROKERS: {{ .Values.kafka.brokers | quote }}

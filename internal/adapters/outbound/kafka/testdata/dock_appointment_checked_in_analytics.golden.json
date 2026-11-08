@@ -1,0 +1,19 @@
+{
+  "specversion": "1.0",
+  "id": "8c7d6e5f-4a3b-4c2d-9e0f-9a8b7c6d5e4f",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn",
+  "subject": "appt-123e4567-e89b-12d3-a456-426614174000",
+  "time": "2026-11-06T07:55:30Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:DockAppointmentCheckedIn:v1",
+  "data": {
+    "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000",
+    "site_id": "WH1",
+    "door_code": "WH1-DOCK-IN-01",
+    "checked_in_at": "2026-11-06T07:55:00Z",
+    "arrival_status": "ON_TIME",
+    "visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10",
+    "version": 2
+  }
+}

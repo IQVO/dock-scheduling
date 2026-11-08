@@ -1,0 +1,15 @@
+{
+  "specversion": "1.0",
+  "id": "9d3e5f10-2a4b-4c6d-8e7f-0b1a2c3d4e5f",
+  "source": "/warehouse/inbound-receiving",
+  "type": "com.warehouse.wms.inbound-receiving.dockappointment.DockAppointmentCheckedIn",
+  "subject": "appt-123e4567-e89b-12d3-a456-426614174000",
+  "time": "2026-10-09T07:50:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:inbound-receiving:events:DockAppointmentCheckedIn:v1",
+  "data": {
+    "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000",
+    "door_code": "WH1-DOCK-IN-01",
+    "checked_in_at": "2026-10-09T07:50:00Z"
+  }
+}

@@ -1,0 +1,119 @@
+{{- if .Values.analytics.enabled }}
+{{- include "dock-scheduling.requireAnalyticsConfig" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dock-scheduling.reportsFullname" . }}
+  labels:
+    {{- include "dock-scheduling.labels" . | nindent 4 }}
+    app.kubernetes.io/component: analytics-reports
+spec:
+  replicas: {{ .Values.analytics.reports.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dock-scheduling.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: analytics-reports
+  template:
+    metadata:
+      labels:
+        {{- include "dock-scheduling.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: analytics-reports
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "dock-scheduling.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: reports
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "dock-scheduling.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/reports"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.analytics.reports.service.targetPort }}
+              protocol: TCP
+          # Env contract verified against cmd/reports/main.go:
+          # ANALYTICS_DATABASE_URL, HTTP_ADDR, SHUTDOWN_DRAIN_DELAY,
+          # LOG_LEVEL, ENVIRONMENT, SERVICE_VERSION and
+          # OTEL_EXPORTER_OTLP_ENDPOINT (/metrics). No Kafka, no OLTP
+          # database, no migrations.
+          env:
+            - name: HTTP_ADDR
+              value: {{ .Values.analytics.reports.httpAddr | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            {{- with .Values.config.shutdownDrainDelay }}
+            - name: SHUTDOWN_DRAIN_DELAY
+              value: {{ . | quote }}
+            {{- end }}
+            - name: ENVIRONMENT
+              value: {{ .Values.environment | quote }}
+            - name: SERVICE_VERSION
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+            {{- if .Values.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.endpoint | quote }}
+            {{- end }}
+            # The reports binary reads ANALYTICS_DATABASE_URL; it is fed the
+            # READER DSN so even a bug cannot mutate the read model.
+            - name: ANALYTICS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dock-scheduling.analyticsSecretName" . }}
+                  key: ANALYTICS_READER_DATABASE_URL
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.analytics.reports.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dock-scheduling.reportsFullname" . }}
+  labels:
+    {{- include "dock-scheduling.labels" . | nindent 4 }}
+    app.kubernetes.io/component: analytics-reports
+spec:
+  type: {{ .Values.analytics.reports.service.type }}
+  ports:
+    - port: {{ .Values.analytics.reports.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dock-scheduling.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: analytics-reports
+{{- end }}

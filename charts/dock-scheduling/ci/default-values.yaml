@@ -1,0 +1,12 @@
+# Used by `helm lint` / `ct lint` (chart-testing): the chart refuses to render
+# without a database source, Kafka brokers and the four consumer groups (the
+# real runtime). Dummy values, no password, never dialled.
+database:
+  url: "postgres://u@example.invalid:5432/db"
+kafka:
+  brokers: "kafka.example.invalid:9092"
+config:
+  yardConsumerGroup: "dock-scheduling-yard"
+  facilityConsumerGroup: "dock-scheduling-facility"
+  asnConsumerGroup: "dock-scheduling-asn"
+  cptConsumerGroup: "dock-scheduling-cpt"

@@ -1,0 +1,20 @@
+{
+  "specversion": "1.0",
+  "id": "4a8c2e91-5b3d-4c7f-a012-9e6d1b8f3c25",
+  "source": "/warehouse/inbound-receiving",
+  "type": "com.warehouse.wms.inbound-receiving.dockappointment.DockAppointmentBooked",
+  "subject": "appt-123e4567-e89b-12d3-a456-426614174000",
+  "time": "2026-10-08T12:05:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:inbound-receiving:events:DockAppointmentBooked:v1",
+  "data": {
+    "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000",
+    "door_code": "WH1-DOCK-IN-01",
+    "carrier": "ACME Freight",
+    "window_start": "2026-10-09T08:00:00Z",
+    "window_end": "2026-10-09T10:00:00Z",
+    "asn_numbers": [
+      "ASN-1001"
+    ]
+  }
+}

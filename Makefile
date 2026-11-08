@@ -26,7 +26,7 @@ COVERAGE_THRESHOLD := 90
 # settings. Pick your richest, most behaviourally-dense aggregate here —
 # not necessarily the biggest package, the one with the most branching
 # domain logic (see HARNESS.md's mutation-testing section).
-MUTATION_FAST_PKG  := ./internal/domain/dockappointment
+MUTATION_FAST_PKG  := ./internal/domain/dockappointment ./internal/domain/dockcalendar ./internal/domain/shared
 # The exhaustive scheduled run — kept in sync with the `mutation` CI job.
 MUTATION_FULL_PKG  := ./internal/domain
 
@@ -122,7 +122,10 @@ mutation:
 		echo "  go install github.com/go-gremlins/gremlins/cmd/gremlins@$(GREMLINS_VERSION)"; \
 		exit 1; \
 	fi
-	$(GREMLINS) unleash $(MUTATION_FAST_PKG)
+	@set -e; for pkg in $(MUTATION_FAST_PKG); do \
+		echo "gremlins unleash $$pkg"; \
+		$(GREMLINS) unleash $$pkg; \
+	done
 
 mutation-full:
 	@if ! command -v $(GREMLINS) >/dev/null 2>&1; then \

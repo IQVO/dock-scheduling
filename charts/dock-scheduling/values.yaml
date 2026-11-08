@@ -1,0 +1,399 @@
+# Default values for dock-scheduling.
+
+replicaCount: 1
+
+# The image is NEVER pulled from a registry in the local kind cluster: it is
+# built from the local checkout and side-loaded with `kind load docker-image`
+# (warehouse-infra overrides repository and tag with a content-derived
+# local-<hash> tag). `pullPolicy: IfNotPresent` is required there, or the
+# kubelet tries to pull from Docker Hub and ImagePullBackOffs. The same image
+# carries every binary: /app/api, /app/mcp, /app/relay, /app/projector,
+# /app/reports and /app/sweep; each workload picks one with
+# `command: ["/app/<name>"]`.
+image:
+  repository: warehouse/dock-scheduling
+  pullPolicy: IfNotPresent
+  tag: "local"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+# The service writes nothing to disk (migrations are embedded with go:embed,
+# logs go to stdout), so the root filesystem is mounted read-only.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: dock-scheduling.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Additive, disabled-by-default alternative to the ingress block above. Same
+# shape as every other chart in this fleet. Routes only to this chart's main
+# REST API Service -- the same Service ingress.yaml targets. warehouse-infra
+# turns it on and supplies the Kong Gateway parentRef + path.
+gatewayApi:
+  enabled: false
+  parentRefs:
+    - name: ""
+      namespace: ""
+      sectionName: "http"
+  hosts:
+    - path: /
+      pathType: PathPrefix
+  stripPath: true
+
+# Kong plugins rendered by THIS chart (kong-plugins.yaml) and attached to the
+# HTTPRoutes above via the konghq.com/plugins annotation. Fleet decision
+# 2026-10-13: Kong configuration belongs to the application charts, not
+# warehouse-infra Terraform. Defaults off; warehouse-infra's values switch
+# them on. NO auth plugin here, ever — the fleet's endpoints are
+# unauthenticated and the gateway adds no authentication or authorization.
+kongPlugins:
+  cors:
+    enabled: false
+    # Exact browser origin, never "*" (endpoints are unauthenticated).
+    origin: "http://localhost"
+  prometheus:
+    enabled: false
+  opentelemetry:
+    enabled: false
+    # OTLP/HTTP traces endpoint of the fleet collector; needs Kong started
+    # with KONG_TRACING_INSTRUMENTATIONS or the plugin exports zero spans.
+    tracesEndpoint: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# HorizontalPodAutoscaler (autoscaling/v2) for the api Deployment, disabled by
+# default so nothing changes replica behaviour silently. When enabled, the
+# Deployment's replicaCount is omitted so the HPA is the sole owner of
+# .spec.replicas. N>1 is safe: aggregate writes are version-guarded, the
+# inline outbox relay claims with FOR UPDATE SKIP LOCKED and the local-copy
+# consumers dedupe on the CloudEvents id in the same transaction; it has not
+# been load-tested. mcp deliberately has no block here (per-process session
+# state, no session affinity), and neither has relay (one replica drains the
+# outbox fine; the dedicated relay Deployment exists to scale the drain
+# independently of the api, not to need an HPA).
+autoscaling:
+  api:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+
+# deployment.environment.name on every span, metric and log (ENVIRONMENT).
+environment: "local"
+
+# Environment read by cmd/api/main.go. Every key maps 1:1 to one env var.
+config:
+  httpAddr: ":8080"                  # HTTP_ADDR
+  logLevel: "info"                   # LOG_LEVEL: debug | info | warn (or warning) | error
+  # OUTBOX_RELAY_INTERVAL: Go duration ("500ms", "2s") or plain seconds.
+  # Empty = not rendered; the binary defaults to 1s.
+  outboxRelayInterval: ""
+  # OUTBOX_BATCH_SIZE: rows claimed per relay pass. Empty = not rendered;
+  # the binary defaults to 100.
+  outboxBatchSize: ""
+  # OUTBOX_MAX_ATTEMPTS: how many times one outbox row may fail before the
+  # relay excludes it from claims (a poison row cannot block the relay
+  # forever; the excluded row stays in outbox_events until an operator
+  # re-arms it). 20 = the fleet default; 0 = unlimited.
+  outboxMaxAttempts: 20
+  # SHUTDOWN_DRAIN_DELAY: wait after /readyz flips before closing the
+  # listener. Empty = not rendered; the binary defaults to 5s.
+  shutdownDrainDelay: ""
+  # The four local-copy/policy consumers run INSIDE cmd/api, each under a
+  # STABLE group id that must come from values (cmd/api exits at boot without
+  # one). A stable id lets a rescheduled pod resume from its committed
+  # offsets. REQUIRED.
+  yardConsumerGroup: ""              # YARD_CONSUMER_GROUP
+  facilityConsumerGroup: ""          # FACILITY_CONSUMER_GROUP
+  asnConsumerGroup: ""               # ASN_CONSUMER_GROUP
+  cptConsumerGroup: ""               # CPT_CONSUMER_GROUP
+  # DOCK_LEGACY_IMPORT_CONSUMER_GROUP: the strangler stage A importer's group
+  # (ADR 0003). Empty keeps the importer OFF -- exactly the model's "unset =
+  # off"; set it only while stage A runs.
+  dockLegacyImportConsumerGroup: ""
+
+# MANDATORY: the service runs on real Postgres only and exits at boot without
+# DATABASE_URL. The chart refuses to render unless database.url or
+# database.existingSecret is set (templates/_helpers.tpl:
+# dock-scheduling.requireDatabase).
+database:
+  url: ""
+  existingSecret: ""
+  existingSecretKey: "DATABASE_URL"
+  # Key, in the same existingSecret, of a DIRECT (non-pooled, session-mode)
+  # Postgres connection string used ONLY for the golang-migrate startup step
+  # (cmd/api and cmd/mcp) -- never for the runtime pgxpool, which always uses
+  # existingSecretKey/DATABASE_URL. golang-migrate takes a session-scoped
+  # pg_advisory_lock that PgBouncer's transaction pooling cannot honour.
+  # `optional: true` on the rendered secretKeyRef so a secret without this key
+  # still starts the pod: the binary falls back to DATABASE_URL.
+  migrationsExistingSecretKey: "MIGRATIONS_DATABASE_URL"
+
+# MANDATORY: the service runs on real Kafka only (the outbox relay, the four
+# consumers and /readyz all need brokers; there is no default broker and no
+# way to switch Kafka off). kafka.brokers is rendered as KAFKA_BROKERS into
+# the api, the mcp server and the projector; the chart refuses to render
+# without it. kafka.enabled is kept only so values written before this chart
+# still render (warehouse-infra sets it to true): it may be true or absent,
+# never false.
+# Produced topics: warehouse.dock-scheduling.events and
+# warehouse.dock-scheduling.analytics; consumed: warehouse.yard-management.events,
+# warehouse.facility.events, warehouse.inbound-receiving.events and
+# warehouse.process-path-management.events. The service never creates topics
+# itself: the broker auto-creates them on first write.
+kafka:
+  enabled: true
+  brokers: ""
+
+# OpenTelemetry traces + metrics, pushed over OTLP/gRPC to a Collector (read
+# by the otel SDK of cmd/api, cmd/mcp and cmd/reports). Export is
+# non-blocking, so a Collector that is down costs telemetry and nothing else;
+# otel.enabled=false skips the env entirely.
+otel:
+  enabled: true
+  endpoint: "otel-collector.observability.svc.cluster.local:4317"
+
+# Extra env vars appended to the api container as a raw list.
+extraEnv: []
+
+# The Postgres dial (migrations + ping) at boot is wrapped in a bounded retry
+# (internal/bootretry), and periodSeconds * failureThreshold gives a ~60s
+# window before the kubelet gives up. Once startupProbe succeeds, liveness
+# takes over; readiness uses the separate /readyz endpoint (flipped to
+# not-ready as the FIRST step of graceful shutdown).
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 2
+  failureThreshold: 30
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+# Room for the binary's graceful shutdown: SHUTDOWN_DRAIN_DELAY (default 5s)
+# + HTTP drain (10s) + consumers drain (10s) + the inline relay drain (10s),
+# sequential, worst case ~35s.
+terminationGracePeriodSeconds: 40
+
+# --- MCP server (docs/adr/0007) ---
+# The Model Context Protocol server (cmd/mcp, Streamable HTTP, read tools L1
+# and attributed idempotent write tools). DISABLED by default. Enabling it
+# renders its own Deployment + Service (component=mcp) over the same OLTP
+# database, with GET /healthz probes, command /app/mcp. Env names in
+# templates/mcp-deployment.yaml match cmd/mcp/main.go. It starts no outbox
+# relay and no Kafka consumer, but READS KAFKA_BROKERS for /readyz (the relay
+# that drains its outbox rows is the api's). No auth / API key: MCP servers
+# are unauthenticated fleet-wide.
+#
+# Deliberately NOT HPA-scalable (no autoscaling.mcp block): the SDK's
+# StreamableHTTPHandler keeps in-memory, per-process MCP session state and
+# the mcp Service has no session affinity, so a second replica could receive
+# a mid-session request its own process never created.
+mcp:
+  enabled: false
+  replicaCount: 1
+  httpAddr: ":8090"                  # MCP_ADDR
+  service:
+    type: ClusterIP
+    port: 8090
+    targetPort: 8090
+  # Kong exposure of the MCP server (mcp-route.yaml): host path
+  # /api/mcp/<context> rewritten to /mcp. Off by default; warehouse-infra
+  # turns it on with the real parentRefs and path.
+  route:
+    enabled: false
+    path: "/api/mcp/dock-scheduling"
+    parentRefs:
+      - name: ""
+        namespace: ""
+        sectionName: "http"
+  extraEnv: []
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# --- Dedicated outbox relay (cmd/relay) ---
+# cmd/api ALREADY relays the outbox inline; this Deployment is the OPTIONAL
+# way to drain the same outbox with a dedicated workload (its own probes and
+# resources) when the api should not spend its budget on publishing. SAFE to
+# run beside the inline relay: claims are FOR UPDATE SKIP LOCKED, so two
+# relays claim disjoint row sets. DISABLED by default (the default render
+# changes nothing). Serves only GET /healthz on ADMIN_ADDR (:8094) -- no
+# Service, nothing routes to it; the kubelet probes the pod directly.
+relay:
+  enabled: false
+  replicaCount: 1
+  adminAddr: ":8094"                 # ADMIN_ADDR
+  # The relay's own tuning knobs; empty falls back to config.outbox* above,
+  # so the two relays stay in step unless deliberately split.
+  outboxRelayInterval: ""
+  outboxBatchSize: ""
+  outboxMaxAttempts: ""
+  extraEnv: []
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# --- Analytics read side (docs/adr/0006) ---
+# The schedule-adherence data product: cmd/projector consumes
+# warehouse.dock-scheduling.analytics into a SEPARATE analytical database,
+# and cmd/reports serves GET /reports/schedule-adherence and
+# /reports/freshness read-only from it. DISABLED by default (the default
+# render is unchanged). Enabling it renders component=analytics-projector
+# (Deployment) and component=analytics-reports (Deployment + Service
+# <release>-reports), plus the analytics Secret. Requires a DSN source (the
+# chart refuses to render otherwise) and kafka.brokers (mandatory for the
+# whole chart).
+analytics:
+  enabled: false
+  database:
+    # The projector's read-write analytical DSN (DIRECT Postgres, not
+    # PgBouncer: it also runs the embedded analytical migrations). No
+    # password in committed values.
+    projectorUrl: ""
+    # The reports reader's DSN -- a read-only role where possible; falls back
+    # to projectorUrl when empty (local/dev).
+    reportsUrl: ""
+    # Name of an existing Secret holding ANALYTICS_DATABASE_URL (projector)
+    # and ANALYTICS_READER_DATABASE_URL (reports). Takes precedence over the
+    # URLs.
+    existingSecret: ""
+  projector:
+    # One replica is enough; N>1 is safe: one fixed group shares the
+    # partitions and every write dedupes on the CloudEvents id in the same
+    # transaction.
+    replicaCount: 1
+    adminAddr: ":8091"                # ADMIN_ADDR (/healthz, /readyz)
+    # ANALYTICS_CONSUMER_GROUP: the projector's FIXED consumer group. A
+    # stable id lets a rescheduled pod resume from its committed offsets; a
+    # brand-new group starts at the earliest offset and rebuilds the model
+    # from history.
+    consumerGroup: "dock-scheduling-analytics"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  reports:
+    replicaCount: 1
+    httpAddr: ":8092"                 # HTTP_ADDR
+    service:
+      type: ClusterIP
+      port: 80
+      targetPort: 8092
+    # Kong exposure of the reports API (reports-route.yaml): host path
+    # /api/<context>/reports rewritten to /reports. Off by default;
+    # warehouse-infra turns it on with the real parentRefs and path.
+    route:
+      enabled: false
+      path: "/api/dock-scheduling/reports"
+      parentRefs:
+        - name: ""
+          namespace: ""
+          sectionName: "http"
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# --- No-show sweep CronJob (the model's NoShowSweep policy) ---
+# Nothing in this service calls POST /no-show-sweeps on a timer, by design:
+# the Kubernetes CronJob is the external scheduler. ON by default; set
+# enabled=false when an external caller drives the endpoint. The Job reuses
+# the service's own image and runs /app/sweep (cmd/sweep), which POSTs an
+# empty body with a fresh Idempotency-Key per pass to this release's own
+# Service. Fail fast: each attempt is bounded by requestTimeoutSeconds,
+# transient failures (connect/timeout, 429, 5xx) are retried up to
+# maxAttempts with doubling backoff capped at maxBackoffSeconds, a give-up
+# exits non-zero (the Job fails with logs), and the Istio sidecar quit
+# (sidecarQuitUrl) is POSTed on EVERY exit path. The render fails when the
+# worst-case retry budget does not fit inside activeDeadlineSeconds.
+sweeps:
+  enabled: true
+  noShow:
+    schedule: "*/5 * * * *"
+  startingDeadlineSeconds: 60
+  activeDeadlineSeconds: 120
+  requestTimeoutSeconds: 15
+  maxAttempts: 4
+  retryBackoffSeconds: 1
+  maxBackoffSeconds: 8
+  # Istio sidecar quit endpoint, POSTed on EVERY exit path (success,
+  # give-up, rejection, bad configuration) so the pod completes. Set ""
+  # outside a mesh.
+  sidecarQuitUrl: "http://127.0.0.1:15020/quitquitquit"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  resources:
+    limits:
+      cpu: 50m
+      memory: 32Mi
+    requests:
+      cpu: 10m
+      memory: 16Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

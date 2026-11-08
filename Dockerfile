@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # --- build stage ---
-FROM golang:1.27-alpine@sha256:738d1cf061836894ff6bb8c33881080ac66de8cf0586615012a0c8f592649cfa AS build
+FROM golang:1.27-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS build
 WORKDIR /src
 
 # Cache go.mod/go.sum download separately from source so editing source
@@ -12,11 +12,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
-# Build EVERY cmd/* binary by looping over the cmd/ directories, so a new
-# composition root can never be merged with a Dockerfile that silently forgets
-# to build it (the first symptom would otherwise be a CrashLoopBackOff on
-# `exec: "/app/<binary>": no such file or directory`). Each binary lands in
-# /out/<dirname>; the chart picks one with `command: ["/app/<dirname>"]`.
+# Build EVERY cmd/* binary (today api, mcp, projector, relay, reports and
+# sweep) by
+# looping over the cmd/ directories, so a new composition root can never be
+# merged with a Dockerfile that silently forgets to build it (CI skips the
+# image build on non-main PRs, so the first symptom would otherwise be a
+# CrashLoopBackOff on `exec: "/app/<binary>": no such file or directory`).
+# Each binary lands in /out/<dirname>; the chart picks one with
+# `command: ["/app/<dirname>"]`.
 # BuildKit cache mounts for the module and build caches speed up repeat
 # builds in CI without baking the cache into the image layers.
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -35,12 +38,15 @@ RUN apk upgrade --no-cache && \
     apk add --no-cache ca-certificates tzdata && \
     addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 WORKDIR /app
-# Embed the SQL migrations in the binary (go:embed) so no migrations directory
-# is copied. The service writes nothing to disk, so the chart mounts the root
-# filesystem read-only. Logs go to stdout.
+# Every binary built above (api, mcp, projector, relay, reports) -> /app/<name>.
+# The OLTP migrations (migrations/) and the ANALYTICAL migrations
+# (analytics/migrations) are embedded in the binaries (go:embed), so no
+# migrations directory is copied. The service writes nothing to disk, so the
+# chart mounts the root filesystem read-only. Logs go to stdout.
 COPY --from=build --chown=app:app /out/ ./
 USER 1000
-EXPOSE 8080
-# cmd/api is the service's main binary (HTTP on :8080). Additional cmd/*
+# 8080 api, 8090 mcp, 8091 projector admin, 8092 reports, 8094 relay admin.
+EXPOSE 8080 8090 8091 8092 8094
+# cmd/api is the service's main binary (HTTP on :8080). The other cmd/*
 # binaries are run by the chart with `command: ["/app/<dirname>"]`.
 ENTRYPOINT ["./api"]

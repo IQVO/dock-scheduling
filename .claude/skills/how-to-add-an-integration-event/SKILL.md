@@ -17,14 +17,15 @@ shared-broker reality has already caused a real incident once.
 ### 1. Is it actually cross-service?
 
 Not every domain event this service raises belongs on the wire. Check
-`internal/adapters/outbound/kafka/publisher.go`'s doc comment — this repo
-forwards only `StockReserved`/`ReservationRevoked`; everything else is a
-local concern published only to the Postgres outbox
-(`internal/adapters/outbound/postgres/event_publisher.go`) for audit, not
-broadcast. Before adding a new event to the Kafka publisher, confirm a
-sibling context genuinely needs to react to it — check
-`docs/docs/ddd/context-map.md` or the equivalent ubiquitous-language doc
-for who's actually downstream.
+`docs/adr/0004-cloudevents-catalogue.md` — this repo publishes only the
+DockAppointment and DockCalendar facts with named consumers; everything
+else is analytics-only. Every forwarded fact is appended to the Postgres
+outbox in the SAME transaction as the aggregate (ADR 0005) and reaches
+Kafka only through the relay (`cmd/relay`, also started inline by
+`cmd/api`) — there is no direct publish path. Before adding a new event
+to the catalogue, confirm a sibling context genuinely needs to react to
+it — check `docs/adr/0003-consumed-contracts-and-local-copies.md` and the
+consumers column of the catalogue for who's actually downstream.
 
 ### 2. Envelope: CloudEvents 1.0, structured mode — MANDATORY
 
@@ -52,9 +53,9 @@ shape, no dual-write, no `EVENT_ENVELOPE_MODE` toggle (see
 `type` follows the platform-wide reverse-DNS convention
 `com.warehouse.<subdomain>.<bounded-context>.<entity>.<EventName>`, all
 lowercase except the final PascalCase event name — e.g.
-`com.warehouse.wms.inventory-storage.reservation.ReservationRevoked`. Take
-the subdomain/context segment from the subdomain table on warehouse-docs'
-Event Standard page (`docs/strategic-design/event-standard-cloudevents.md`);
+`com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked`.
+Take the subdomain/context segment from the subdomain table on warehouse-docs'
+Event Standard page (the fleet repo's strategic-design CloudEvents page);
 don't guess it. The same `type` is used on the analytics topic; only
 `dataschema` changes (`…:analytics:<EventName>:v1`).
 
@@ -120,10 +121,10 @@ hardcoded `localhost:9092` fails CI).
 ### 1. Never import the sibling's Go packages
 
 This service knows a sibling's topic name, its exact CloudEvents `type`
-strings and payload shape ONLY — never its Go types. See `internal/adapters/outbound/facilitycache/consumer.go`'s
-own doc comment: "This service has no business knowing anything else
-about that context beyond this topic name and the envelope/payload shapes
-below." Hand-mirror the payload struct locally; do not add a Go module
+strings and payload shape ONLY — never its Go types. See `internal/adapters/inbound/kafka/facility_consumer.go`:
+the facility consumer mirrors LocationSlotRegistered/Decommissioned and
+ZoneRegistered payloads by hand and reads them through the inbox, knowing
+nothing else about facility-layout. Hand-mirror the payload struct locally; do not add a Go module
 dependency on the sibling repo (an architecture fitness test in most
 repos in this fleet would catch that anyway for the stricter contexts —
 check this repo's own `internal/architecture/` for a
@@ -169,10 +170,12 @@ EXACTLY what you want: pick up where the single instance left off.
 
 **Pattern B — per-process-unique consumer group (a generated id).** Use
 when this consumer rebuilds a complete read model from a topic's FULL
-history on every start (an event-sourced local cache, not a work queue) —
-see `facilitycache/consumer.go`'s `consumerGroupPrefix` +
-`uniqueConsumerGroup()`. The group id MUST be unique per process instance
-(hostname+PID+timestamp), NEVER a fixed shared string. Consumer group
+history on every start (an event-sourced local cache, not a work queue).
+This repo has no such consumer — its local copies (doors, ASNs, cutoffs)
+are Postgres tables resumed from committed offsets (Pattern A) — so a new
+consumer that wants full-history replay must mint a group id unique per
+process instance (hostname+PID+timestamp), NEVER a fixed shared string.
+Consumer group
 offsets are shared infrastructure state: a brand-new process joining a
 group an EARLIER instance already consumed resumes from that instance's
 committed offset, so the new process gets marked "ready" with an empty
