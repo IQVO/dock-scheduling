@@ -5,7 +5,7 @@
 // every fact, the dead-letter topic for rows that can never publish. Delivery
 // is at-least-once (the CloudEvents id is persisted at enqueue time).
 //
-// It does not serve HTTP and does not run migrations: the schema belongs to the
+// It serves only GET /healthz (ADMIN_ADDR, default :8094) and does not run migrations: the schema belongs to the
 // API's boot. It is real wiring only (pgx + kafka-go); in-memory doubles are
 // test-only.
 package main
@@ -64,6 +64,16 @@ func run(ctx context.Context, getenv func(string) string, logger *slog.Logger) e
 	if err := pool.Ping(ctx); err != nil {
 		return fmt.Errorf("reach the database named by %s: %w", postgres.EnvDatabaseURL, err)
 	}
+
+	probe, err := startAdmin(cfg.adminAddr, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := probe.close(); err != nil {
+			logger.Warn("relay admin server did not drain", "error", err)
+		}
+	}()
 
 	sink := outboundkafka.NewRelaySink(cfg.brokers)
 	relay := outboxrelay.NewOutboxRelay(postgres.NewOutboxStore(pool), sink, logger,

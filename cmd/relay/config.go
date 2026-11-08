@@ -21,6 +21,8 @@ type relayConfig struct {
 	interval    time.Duration
 	batchSize   int
 	maxAttempts int
+	// adminAddr is the /healthz listener (ADMIN_ADDR, default :8094).
+	adminAddr string
 }
 
 // loadConfig reads the environment. A missing DATABASE_URL or KAFKA_BROKERS is
@@ -41,6 +43,9 @@ func loadConfig(getenv func(string) string, logger *slog.Logger) (relayConfig, e
 	cfg.interval = parseRelayInterval(getenv(config.EnvRelayInterval), logger)
 	cfg.batchSize = parseBatchSize(getenv(config.EnvBatchSize), logger)
 	cfg.maxAttempts = outboxMaxAttempts(getenv(config.EnvMaxAttempts), logger)
+	if cfg.adminAddr = strings.TrimSpace(getenv(envAdminAddr)); cfg.adminAddr == "" {
+		cfg.adminAddr = defaultAdminAddr
+	}
 	return cfg, nil
 }
 
