@@ -1,0 +1,50 @@
+{{ .Chart.Name }} has been deployed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+Service:   {{ include "dock-scheduling.fullname" . }} ({{ .Values.service.type }}, port {{ .Values.service.port }})
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+Ingress:   http://{{ .host }}{{ (index .paths 0).path }}
+{{- end }}
+{{- else if .Values.gatewayApi.enabled }}
+Gateway API HTTPRoute enabled -- routed via the parentRefs/hosts configured
+in gatewayApi.*.
+{{- else }}
+To reach it locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "dock-scheduling.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/healthz
+{{- end }}
+
+{{- if .Values.mcp.enabled }}
+
+MCP server (Streamable HTTP, no auth):
+  http://{{ include "dock-scheduling.mcpFullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.mcp.service.port }}/mcp
+{{- end }}
+
+{{- if .Values.relay.enabled }}
+
+Dedicated outbox relay (cmd/relay, GET /healthz only, no Service):
+  kubectl --namespace {{ .Release.Namespace }} logs deploy/{{ include "dock-scheduling.relayFullname" . }}
+{{- end }}
+
+{{- if .Values.analytics.enabled }}
+
+Analytics read side (ADR 0006):
+  projector: {{ include "dock-scheduling.projectorFullname" . }} (group {{ .Values.analytics.projector.consumerGroup }})
+  reports:   http://{{ include "dock-scheduling.reportsFullname" . }}.{{ .Release.Namespace }}.svc.cluster.local{{- if ne (int .Values.analytics.reports.service.port) 80 }}:{{ .Values.analytics.reports.service.port }}{{ end }}/reports/schedule-adherence
+{{- end }}
+
+{{- if .Values.sweeps.enabled }}
+
+No-show sweep CronJob: {{ .Values.sweeps.noShow.schedule }} -> POST /no-show-sweeps on this release's Service.
+{{- end }}
+
+Runtime: real Postgres and real Kafka only.
+
+DockAppointment facts are relayed from the transactional outbox onto
+warehouse.dock-scheduling.events and warehouse.dock-scheduling.analytics
+({{ .Values.kafka.brokers }}). /readyz is 200 only while Postgres answers a
+ping and a Kafka broker answers a metadata request.

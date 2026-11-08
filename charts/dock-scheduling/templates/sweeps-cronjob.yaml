@@ -1,0 +1,97 @@
+{{- /*
+Scheduler of the no-show sweep (the model's NoShowSweep policy): nothing in
+this service calls POST /no-show-sweeps on a timer, by design -- a
+Kubernetes CronJob is the external scheduler. ON by default
+(sweeps.enabled=true); set it false when an external caller drives the
+endpoint. No in-process ticker exists.
+
+The Job reuses the service's own image and runs its /app/sweep entrypoint
+(cmd/sweep), which POSTs an empty body with a fresh Idempotency-Key per pass
+to the in-cluster Service (the route sits behind the DETACHED key
+middleware, so the key makes every retry of one pass replay instead of
+sweeping twice). Fail fast: each attempt is bounded by
+sweeps.requestTimeoutSeconds, transient failures (connect/timeout, 429,
+5xx) are retried up to sweeps.maxAttempts with doubling backoff capped at
+sweeps.maxBackoffSeconds, a give-up exits non-zero (the Job fails with
+logs), and the Istio sidecar quit (sweeps.sidecarQuitUrl) is POSTed on
+EVERY exit path. The render fails when the worst-case retry budget does not
+fit inside activeDeadlineSeconds, so a values change can not reintroduce
+the hang.
+*/ -}}
+{{- if .Values.sweeps.enabled }}
+{{- $root := . }}
+{{- $s := .Values.sweeps }}
+{{- $budget := add (mul (int $s.maxAttempts) (int $s.requestTimeoutSeconds)) (mul (sub (int $s.maxAttempts) 1) (int $s.maxBackoffSeconds)) }}
+{{- if ge (int $budget) (int $s.activeDeadlineSeconds) }}
+{{- fail (printf "sweeps: worst-case retry budget %ds (maxAttempts x requestTimeoutSeconds + (maxAttempts-1) x maxBackoffSeconds) must be below activeDeadlineSeconds %ds" (int $budget) (int $s.activeDeadlineSeconds)) }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-no-show-sweep" (include "dock-scheduling.fullname" $root) | trunc 52 | trimSuffix "-" }}
+  labels:
+    {{- include "dock-scheduling.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: sweep-no-show
+spec:
+  schedule: {{ $s.noShow.schedule | quote }}
+  # Never overlap two passes of the same sweep: it is idempotent, but a
+  # second concurrent pass would only repeat the work (and re-publish
+  # DockAppointmentNoShow for the same appointments).
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ $s.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ $s.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $s.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $s.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "dock-scheduling.selectorLabels" $root | nindent 12 }}
+            app.kubernetes.io/component: sweep-no-show
+        spec:
+          restartPolicy: Never
+          {{- with $root.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "dock-scheduling.serviceAccountName" $root }}
+          securityContext:
+            {{- toYaml $root.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: sweep
+              securityContext:
+                {{- toYaml $root.Values.securityContext | nindent 16 }}
+              image: {{ include "dock-scheduling.image" $root | quote }}
+              imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+              command:
+                - /app/sweep
+              env:
+                - name: SWEEP_URL
+                  value: {{ printf "http://%s:%v/no-show-sweeps" (include "dock-scheduling.fullname" $root) $root.Values.service.port | quote }}
+                - name: SWEEP_REQUEST_TIMEOUT
+                  value: {{ printf "%ds" (int $s.requestTimeoutSeconds) | quote }}
+                - name: SWEEP_MAX_ATTEMPTS
+                  value: {{ $s.maxAttempts | quote }}
+                - name: SWEEP_RETRY_BACKOFF
+                  value: {{ printf "%ds" (int $s.retryBackoffSeconds) | quote }}
+                - name: SWEEP_MAX_BACKOFF
+                  value: {{ printf "%ds" (int $s.maxBackoffSeconds) | quote }}
+                - name: SIDECAR_QUIT_URL
+                  value: {{ $s.sidecarQuitUrl | default "" | quote }}
+              resources:
+                {{- toYaml $root.Values.sweeps.resources | nindent 16 }}
+          {{- with $root.Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $root.Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $root.Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

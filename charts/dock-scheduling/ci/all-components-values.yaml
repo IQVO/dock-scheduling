@@ -1,0 +1,39 @@
+# Used by `helm lint` / `ct lint`: every optional component enabled at once
+# (the chart render test's everything-set case mirrors this).
+database:
+  existingSecret: "dock-scheduling-db"
+config:
+  outboxRelayInterval: "500ms"
+  outboxBatchSize: "50"
+  outboxMaxAttempts: 20
+  shutdownDrainDelay: "5s"
+  yardConsumerGroup: "dock-scheduling-yard"
+  facilityConsumerGroup: "dock-scheduling-facility"
+  asnConsumerGroup: "dock-scheduling-asn"
+  cptConsumerGroup: "dock-scheduling-cpt"
+  dockLegacyImportConsumerGroup: "dock-scheduling-legacy-import"
+kafka:
+  enabled: true
+  brokers: "kafka.warehouse-systems.svc.cluster.local:9092"
+gatewayApi:
+  enabled: true
+  parentRefs:
+    - name: warehouse-gateway
+      namespace: kong
+      sectionName: http
+  hosts:
+    - path: /api/dock-scheduling
+      pathType: PathPrefix
+autoscaling:
+  api:
+    enabled: true
+mcp:
+  enabled: true
+relay:
+  enabled: true
+analytics:
+  enabled: true
+  database:
+    # Dummy DSNs, no password (a real one comes from a Secret in the cluster).
+    projectorUrl: "postgres://projector@example.invalid:5432/dock_scheduling_analytics"
+    reportsUrl: "postgres://reports@example.invalid:5432/dock_scheduling_analytics"

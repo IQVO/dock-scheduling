@@ -375,6 +375,84 @@ jobs:
         run: go test ./internal/architecture/... -v
 
   # ============================================================
+  # CLASSIFICATION: PACKAGING VALIDATION (Helm chart lint)
+  # The chart landed with the packaging step, so this job is restored
+  # (plain pull_request gate, copied from the fleet's sibling charts).
+  # ============================================================
+  helm-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+        with:
+          version: v3.16.4
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.x"
+          check-latest: true
+      - uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
+      - name: Run chart-testing (lint)
+        run: ct lint --charts charts/dock-scheduling --validate-maintainers=false --check-version-increment=false
+      - name: Chart wiring tests (each Service selects exactly one Deployment)
+        run: |
+          pip install --require-hashes -r .github/requirements/chart-tests.txt
+          python3 charts/dock-scheduling/tests/test_service_selectors.py
+
+  # ============================================================
+  # CLASSIFICATION: SECURITY SCANNER (container image CVEs)
+  # Builds the image locally on PRs (never pushes) and Trivy-scans it;
+  # CRITICAL/HIGH findings with a fix available fail the job. Restored with
+  # the packaging step (the image now carries every cmd/* binary).
+  # ============================================================
+  trivy-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Build image (local only, not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: "dock-scheduling:scan"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Trivy scan (SARIF, always uploaded)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        if: always()
+        with:
+          image-ref: 'dock-scheduling:scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-unfixed: true
+      - name: Upload Trivy SARIF to Security tab
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      - name: "Trivy scan (blocking gate: CRITICAL/HIGH with a fix available)"
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'dock-scheduling:scan'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  # ============================================================
   # CLASSIFICATION: PUBLISH (Docker image) -- push-to-main only
   # ============================================================
   docker-publish:

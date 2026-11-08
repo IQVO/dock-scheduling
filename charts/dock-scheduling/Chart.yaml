@@ -1,0 +1,15 @@
+apiVersion: v2
+name: dock-scheduling
+description: >-
+  Dock Scheduling — the door calendar of every site: dock appointments,
+  closures and the no-double-booking rule; publishes DockAppointment facts on
+  warehouse.dock-scheduling.events
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/IQVO/dock-scheduling
+keywords:
+  - ddd
+  - hexagonal-architecture
+  - warehouse-management-system
+  - golang

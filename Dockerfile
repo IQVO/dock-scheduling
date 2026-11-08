@@ -12,7 +12,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
-# Build EVERY cmd/* binary (today api, mcp, projector, relay and reports) by
+# Build EVERY cmd/* binary (today api, mcp, projector, relay, reports and
+# sweep) by
 # looping over the cmd/ directories, so a new composition root can never be
 # merged with a Dockerfile that silently forgets to build it (CI skips the
 # image build on non-main PRs, so the first symptom would otherwise be a
