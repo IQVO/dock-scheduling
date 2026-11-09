@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["reason"],"additionalProperties":false,"properties":{"reason":{"type":"string","description":"`TURNED_AWAY` and `ASN_CANCELLED` are set by the service only.","enum":["CARRIER_REQUEST","SITE_REQUEST"]}},"title":"CancelRequest"},"example":{"reason":"CARRIER_REQUEST"}}}}}

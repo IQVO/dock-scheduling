@@ -1,0 +1,76 @@
+---
+id: dock-scheduling-api
+title: "Dock Scheduling API"
+description: "The WMS-tier owner of **door time** in the warehouse-systems platform (ADR 0001, ADR 0002): every booked window on"
+sidebar_label: Introduction
+sidebar_position: 0
+hide_title: true
+custom_edit_url: null
+---
+
+import ApiLogo from "@theme/ApiLogo";
+import Heading from "@theme/Heading";
+import SchemaTabs from "@theme/SchemaTabs";
+import TabItem from "@theme/TabItem";
+import Export from "@theme/ApiExplorer/Export";
+
+<span
+  className={"theme-doc-version-badge badge badge--secondary"}
+  children={"Version: 1.0.0"}
+>
+</span>
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Dock Scheduling API"}
+>
+</Heading>
+
+
+
+The WMS-tier owner of **door time** in the warehouse-systems platform (ADR 0001, ADR 0002): every booked window on
+every dock door, inbound and outbound, from booking through arrival to door release, the no-double-booking rule, door
+operating hours and closures, ETA-driven risk and no-shows.
+
+One calendar per door: inbound and outbound appointments share it, and a door whose `dockFlow` is `Both` takes either
+direction. Windows are half-open, `[windowStart, windowEnd)`; `[10:00, 12:00)` and `[12:00, 14:00)` are compatible.
+Arrival and door release are physical facts owned by yard-management: this API never records them, the service applies
+them from yard events (ADR 0003).
+
+Appointment `state` runs `BOOKED -> CHECKED_IN -> COMPLETED`, or `BOOKED/CHECKED_IN -> CANCELLED`, or
+`BOOKED -> NO_SHOW`; the last three are terminal. `ETag` is the appointment version; `If-Match` is honoured on the
+reschedule and cancel sub-resources (412 on mismatch).
+
+Events are published as CloudEvents on `warehouse.dock-scheduling.events` through a transactional outbox (see
+`apis/asyncapi.yaml`, ADR 0004). Every `POST` is idempotent: send an `Idempotency-Key`; a replay carries
+`Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
+RFC 7807 problem documents with `type = https://errors.dock-scheduling.warehouse-systems.dev/<slug>`. There is no
+authentication layer (fleet decision 2026-09-11).
+
+The schedule-adherence report (`GET /reports/schedule-adherence`) and the projection freshness are NOT served by this
+API: they live on the separate `cmd/reports` binary, specified in `apis/openapi-reports.yaml` (ADR 0006).
+
+
+<div
+  style={{"display":"flex","flexDirection":"column","marginBottom":"var(--ifm-paragraph-margin-bottom)"}}
+>
+  <h3
+    style={{"marginBottom":"0.25rem"}}
+  >
+    Contact
+  </h3><span>
+    dock-scheduling maintainers: 
+  </span><span>
+    URL: [https://github.com/IQVO/dock-scheduling](https://github.com/IQVO/dock-scheduling)
+  </span>
+</div><div
+  style={{"marginBottom":"var(--ifm-paragraph-margin-bottom)"}}
+>
+  <h3
+    style={{"marginBottom":"0.25rem"}}
+  >
+    License
+  </h3>
+</div>
+      
