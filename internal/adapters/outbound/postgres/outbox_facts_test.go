@@ -81,6 +81,8 @@ func TestAppointmentFactsRenderTheGoldenWireData(t *testing.T) {
 			Header: apptHeader(2, ts(6, 7, 55, 30)), DoorCode: door1, CheckedInAt: ts(6, 7, 55, 0), ArrivalStatus: dockappointment.OnTime, VisitID: "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10",
 		}},
 		{"dock_appointment_door_reassigned_analytics.golden.json", dockappointment.DoorReassigned{Header: apptHeader(3, ts(6, 8, 20, 0)), FromDoorCode: door1, ToDoorCode: door2}},
+		// ADR 0010: the integration golden carries the very same data.
+		{"dock_appointment_door_reassigned.golden.json", dockappointment.DoorReassigned{Header: apptHeader(3, ts(6, 8, 20, 0)), FromDoorCode: door1, ToDoorCode: door2}},
 		{"dock_appointment_completed_analytics.golden.json", dockappointment.CompletedEvent{Header: apptHeader(3, ts(6, 9, 40, 10)), DoorCode: door1, CompletedAt: ts(6, 9, 40, 0)}},
 		{"dock_appointment_at_risk_analytics.golden.json", dockappointment.AtRisk{
 			Header: apptHeader(2, ts(6, 7, 30, 0)), DoorCode: door1, EtaAt: ts(6, 9, 10, 0), WindowStart: hours, WindowEnd: ts(6, 10, 0, 0), Cause: dockappointment.LateEta,

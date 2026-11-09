@@ -207,19 +207,19 @@ func (j *journey) referenceData(t *testing.T) {
 	}
 	publishZone(t, "zone-WH1-in", "WH1")
 	publishDoor(t, door2, "zone-WH1-in", "Both")
-	for _, n := range []string{asn, "ASN-IT-2", "ASN-IT-3", "ASN-IT-4", "ASN-IT-5", "ASN-IT-6"} {
+	for _, n := range []string{asn, "ASN-IT-2", "ASN-IT-3", "ASN-IT-4", "ASN-IT-5", "ASN-IT-6", "ASN-IT-7"} {
 		publishAsn(t, n)
 	}
 	waitCommitted(t, facilityGroup, inboundkafka.FacilityTopic, 3)
-	waitCommitted(t, asnGroup, inboundkafka.InboundReceivingTopic, 6)
+	waitCommitted(t, asnGroup, inboundkafka.InboundReceivingTopic, 7)
 	if n := count(t, j.databaseURL, `SELECT count(*) FROM doors`); n != 2 {
 		t.Errorf("doors rows = %d, want 2 (both slots fed through Kafka)", n)
 	}
 	if n := count(t, j.databaseURL, `SELECT count(*) FROM zones WHERE site_code = 'WH1'`); n != 1 {
 		t.Errorf("zones rows = %d, want 1", n)
 	}
-	if n := count(t, j.databaseURL, `SELECT count(*) FROM asns WHERE status = 'REGISTERED'`); n != 6 {
-		t.Errorf("registered ASN rows = %d, want 6", n)
+	if n := count(t, j.databaseURL, `SELECT count(*) FROM asns WHERE status = 'REGISTERED'`); n != 7 {
+		t.Errorf("registered ASN rows = %d, want 7", n)
 	}
 }
 
@@ -326,6 +326,17 @@ func (j *journey) facts(t *testing.T) {
 		}
 		j.legacy = id
 	})
+
+	t.Run("a trailer docked at another door reassigns the appointment (ActualDoorWins)", func(t *testing.T) {
+		id := j.bookAt(t, "it-fact-f", door2, base.Add(10*time.Hour), "ASN-IT-7")
+		trailerDocked(t, "trl-it-f", door, id, base.Add(10*time.Hour+5*time.Minute))
+		yard()
+		waitFor(t, id+" to move to "+door, 60*time.Second, func() bool { return j.view(t, id)["doorCode"] == door })
+		if v := j.view(t, id); v["state"] != "BOOKED" || v["version"] != float64(2) {
+			t.Errorf("reassigned view = %v, want BOOKED at version 2 (booked, door reassigned)", v)
+		}
+		j.reassigned = id
+	})
 }
 
 // metrics is the body of GET /metrics.
@@ -384,7 +395,11 @@ func (j *journey) factEvents(t *testing.T) {
 	if len(events["DockAppointmentCheckedIn"]) != 0 || len(events["DockAppointmentCompleted"]) != 0 {
 		t.Errorf("analytics-only events leaked onto the events topic: %v", events)
 	}
+	// ADR 0010: the door reassignment is an integration event, on both topics.
+	reassigned := map[string]any{"site_id": "WH1", "from_door_code": door2, "to_door_code": door, "version": float64(2)}
+	has(events, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
 	analytics := byType(outboundkafka.TopicAnalytics)
+	has(analytics, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
 	has(analytics, "DockAppointmentCheckedIn", j.completed, map[string]any{"arrival_status": "ON_TIME", "visit_id": "visit-it-b"})
 	has(analytics, "DockAppointmentCompleted", j.completed, map[string]any{"door_code": door2})
 	has(analytics, "DockAppointmentCompleted", j.implicit, nil)

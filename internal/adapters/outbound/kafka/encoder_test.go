@@ -50,7 +50,7 @@ func goldenCases() []goldenCase {
 		{"DockAppointmentCancelled", "dockappointment", apptID, "2b1a0f9e-8d7c-4b6a-a594-837261504f3e", at(5, 14, 20, 0), true},
 		{"DockAppointmentNoShow", "dockappointment", apptID, "4d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a", at(6, 11, 5, 0), true},
 		{"DockAppointmentCheckedIn", "dockappointment", apptID, "8c7d6e5f-4a3b-4c2d-9e0f-9a8b7c6d5e4f", at(6, 7, 55, 30), false},
-		{"DockAppointmentDoorReassigned", "dockappointment", apptID, "a5948372-6150-4f3e-8d7c-4b6a2b1a0f9e", at(6, 8, 20, 0), false},
+		{"DockAppointmentDoorReassigned", "dockappointment", apptID, "a5948372-6150-4f3e-8d7c-4b6a2b1a0f9e", at(6, 8, 20, 0), true}, // ADR 0010
 		{"DockAppointmentCompleted", "dockappointment", apptID, "d4e5f6a7-b8c9-4d0e-8f2a-3b4c5d6e7f80", at(6, 9, 40, 10), false},
 		{"DockAppointmentAtRisk", "dockappointment", apptID, "f3e2d1c0-9b8a-4c5d-8e7f-8a9b0c1d2e3f", at(6, 7, 30, 0), false},
 		{"DoorClosureScheduled", "dockcalendar", siteID, "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", at(5, 15, 0, 0), true},
@@ -257,6 +257,58 @@ func TestEncode_AnalyticsTwinDiffersOnlyInDataSchema(t *testing.T) {
 			msgs[1].Subject != msgs[0].Subject || !bytes.Equal(msgs[1].Key, msgs[0].Key) || !reflect.DeepEqual(msgs[1].Headers, msgs[0].Headers) {
 			t.Errorf("%s: the twins' shared columns differ", c.name)
 		}
+	}
+}
+
+// ADR 0010: DockAppointmentDoorReassigned is an integration event. The relay
+// writes it to warehouse.dock-scheduling.events FIRST (the contract
+// inbound-receiving's appointment copy reads) and to the analytics topic
+// second, under one id, with the exact type, key and payload. Pinned with
+// literals, independently of the goldens.
+func TestEncode_DoorReassignedIsPublishedOnTheIntegrationTopic(t *testing.T) {
+	data := `{"appointment_id":"` + apptID + `","site_id":"WH1","from_door_code":"WH1-DOCK-IN-01","to_door_code":"WH1-DOCK-IN-02","version":3}`
+	msgs, err := kafka.Encode(outbox.Fact{
+		EventID: "a5948372-6150-4f3e-8d7c-4b6a2b1a0f9e", Entity: "dockappointment", Event: "DockAppointmentDoorReassigned",
+		AggregateID: apptID, OccurredAt: at(6, 8, 20, 0), Data: json.RawMessage(data),
+	})
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("%d messages, want 2: the integration message and its analytics twin", len(msgs))
+	}
+	const wantType = "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned"
+	for i, want := range []struct{ topic, dataschema string }{
+		{"warehouse.dock-scheduling.events", "urn:warehouse:dock-scheduling:events:DockAppointmentDoorReassigned:v1"},
+		{"warehouse.dock-scheduling.analytics", "urn:warehouse:dock-scheduling:analytics:DockAppointmentDoorReassigned:v1"},
+	} {
+		m := msgs[i]
+		if m.Topic != want.topic || m.EventType != wantType || string(m.Key) != apptID || m.Subject != apptID || m.DataSchema != want.dataschema {
+			t.Errorf("message %d = topic %q type %q key %q subject %q dataschema %q, want %q %q %q %q %q",
+				i, m.Topic, m.EventType, m.Key, m.Subject, m.DataSchema, want.topic, wantType, apptID, apptID, want.dataschema)
+		}
+		assertDoorReassignedEnvelope(t, i, m.Value, wantType, want.dataschema)
+	}
+}
+
+// assertDoorReassignedEnvelope decodes one DockAppointmentDoorReassigned value
+// and checks the CloudEvents attributes and the exact data object.
+func assertDoorReassignedEnvelope(t *testing.T, i int, value []byte, wantType, wantSchema string) {
+	t.Helper()
+	e, err := cloudevents.Decode(value)
+	if err != nil {
+		t.Fatalf("message %d is not a CloudEvent: %v", i, err)
+	}
+	if e.SpecVersion() != "1.0" || e.Type() != wantType || e.ID() != "a5948372-6150-4f3e-8d7c-4b6a2b1a0f9e" || e.DataSchema() != wantSchema {
+		t.Errorf("message %d envelope: specversion %q type %q id %q dataschema %q", i, e.SpecVersion(), e.Type(), e.ID(), e.DataSchema())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(e.Data(), &got); err != nil {
+		t.Fatal(err)
+	}
+	wantData := map[string]any{"appointment_id": apptID, "site_id": "WH1", "from_door_code": "WH1-DOCK-IN-01", "to_door_code": "WH1-DOCK-IN-02", "version": 3.0}
+	if !reflect.DeepEqual(got, wantData) {
+		t.Errorf("message %d data = %v, want exactly %v", i, got, wantData)
 	}
 }
 

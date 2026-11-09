@@ -182,7 +182,8 @@ func calendarFacts(t *testing.T) []dockcalendar.Event {
 // published facts of ADR 0004 are written through the production
 // OutboxPublisher inside real unit-of-work transactions; the production relay
 // and RelaySink publish them, in outbox order. The events topic carries
-// exactly the six integration facts and the analytics topic all eleven; every
+// exactly the seven integration facts (ADR 0010 added the door reassignment)
+// and the analytics topic all eleven; every
 // message matches its golden envelope exactly.
 func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	ctx := context.Background()
@@ -218,12 +219,13 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	r := relay.NewOutboxRelay(postgres.NewOutboxStore(pool), sink, quiet(), relay.WithMaxAttempts(relay.DefaultMaxAttempts))
 	runRelay(t, r, sink)
 
-	integration := kafkatest.ReadN(t, outboundkafka.TopicEvents, 6, 60*time.Second)
+	integration := kafkatest.ReadN(t, outboundkafka.TopicEvents, 7, 60*time.Second)
 	for i, w := range []struct{ key, golden string }{
 		{apptID, "dock_appointment_booked.golden.json"},
 		{apptID, "dock_appointment_rescheduled.golden.json"},
 		{apptID, "dock_appointment_cancelled.golden.json"},
 		{apptID, "dock_appointment_no_show.golden.json"},
+		{apptID, "dock_appointment_door_reassigned.golden.json"}, // ADR 0010
 		{"WH1", "door_closure_scheduled.golden.json"},
 		{"WH1", "door_closure_lifted.golden.json"},
 	} {
@@ -248,8 +250,8 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	}
 
 	// Analytics-only facts never reach the integration topic.
-	if n := kafkatest.EndOffset(t, outboundkafka.TopicEvents); n != 6 {
-		t.Errorf("the events topic holds %d messages, want exactly the 6 integration facts", n)
+	if n := kafkatest.EndOffset(t, outboundkafka.TopicEvents); n != 7 {
+		t.Errorf("the events topic holds %d messages, want exactly the 7 integration facts", n)
 	}
 	// Every published row left the outbox (delete-on-publish).
 	waitFor(t, "the outbox to drain", 10*time.Second, func() bool { return pgtest.Count(t, pool, "outbox") == 0 })
