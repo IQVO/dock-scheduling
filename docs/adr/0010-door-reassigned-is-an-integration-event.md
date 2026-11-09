@@ -1,8 +1,8 @@
 # 10. DockAppointmentDoorReassigned is an integration event
 
-Status: Accepted (2026-11-09). Amends the `DockAppointmentDoorReassigned` row of ADR 0004 (CloudEvents catalogue) and the
-analytics-only list of ADR 0006 section 1; everything else in both stands. Additive: no payload, `type`, key or analytics-stream
-change, no migration.
+Status: Accepted (2026-11-09). Amends the `DockAppointmentDoorReassigned` row of ADR 0004 (CloudEvents catalogue), the ReassignDoor
+row of ADR 0002's state table and the analytics-only list of ADR 0006 section 1; each now points here. Everything else in them
+stands. Additive: no payload, `type`, key or analytics-stream change, no migration.
 
 ## Context
 

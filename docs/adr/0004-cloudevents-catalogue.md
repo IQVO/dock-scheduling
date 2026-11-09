@@ -16,7 +16,7 @@ One `type:` line per published type and stream:
 | DockAppointmentCancelled | events | yard-management, warehouse-planning, inbound-receiving | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled |
 | DockAppointmentNoShow | events | yard-management, warehouse-planning, exception-management | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow |
 | DockAppointmentCheckedIn | analytics only | analytics only | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn |
-| DockAppointmentDoorReassigned | analytics only | analytics only | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned |
+| DockAppointmentDoorReassigned | events (per ADR 0010) | inbound-receiving | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned |
 | DockAppointmentCompleted | analytics only | analytics only | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCompleted |
 | DockAppointmentAtRisk | analytics only | analytics only | type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentAtRisk |
 | DoorClosureScheduled | events (key site_id) | yard-management | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled |

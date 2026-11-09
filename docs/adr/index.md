@@ -8,7 +8,8 @@ slug: /
 # Architecture decision records
 
 Each status below is copied from the ADR body's own `Status:` line, which is the authority; ADR bodies are not edited after
-acceptance except to correct a wording the later ADR that supersedes it names (ADR 0002 A15 now says L3, per ADR 0007).
+acceptance except to correct a wording the later ADR that supersedes it names (ADR 0002 A15 now says L3, per ADR 0007; the
+DockAppointmentDoorReassigned rows of ADR 0002 and ADR 0004 and the analytics-only list of ADR 0006 now point to ADR 0010).
 
 | ADR | Title | Status |
 | --- | --- | --- |
