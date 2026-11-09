@@ -60,7 +60,7 @@ export CPT_CONSUMER_GROUP=dock-scheduling-cpt
 go run ./cmd/api
 ```
 
-It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is built on develop and not yet deployed.
+It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is built on develop and registered in `warehouse-infra` develop, but not yet applied to the cluster (no pod runs yet).
 
 ## First calls
 
