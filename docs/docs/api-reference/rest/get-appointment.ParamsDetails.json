@@ -1,0 +1,1 @@
+{"parameters":[{"name":"appointmentId","in":"path","required":true,"description":"The appointment id (`appt-` followed by a lowercase UUID).","schema":{"type":"string","pattern":"^appt-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},"example":"appt-123e4567-e89b-12d3-a456-426614174000"}]}

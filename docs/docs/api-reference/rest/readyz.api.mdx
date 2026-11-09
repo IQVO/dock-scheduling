@@ -1,0 +1,63 @@
+---
+id: readyz
+title: "Readiness probe"
+description: "200 when the service can serve traffic. 503 while draining for shutdown (`{'status':'not_ready'}`) or while Postgres"
+sidebar_label: "Readiness probe"
+hide_title: true
+hide_table_of_contents: true
+api: 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
+sidebar_class_name: "get api-method"
+info_path: docs/api-reference/rest/dock-scheduling-api
+custom_edit_url: null
+hide_send_button: true
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Readiness probe"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/readyz"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+200 when the service can serve traffic. 503 while draining for shutdown (`{"status":"not_ready"}`) or while Postgres
+or the Kafka broker is unreachable (problem `dependency-unavailable`). Kafka readiness is reachability only (a broker
+answers a metadata request); a missing topic never makes the service unready.
+
+
+<ParamsDetails>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./readyz.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./readyz.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      
