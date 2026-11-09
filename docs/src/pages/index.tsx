@@ -35,7 +35,7 @@ function HomepageHeader() {
           {siteConfig.title}
         </Heading>
         <p className={styles.heroSubtitle}>{siteConfig.tagline}</p>
-        <p className={styles.heroLead}>TODO-LEAD</p>
+        <p className={styles.heroLead}>The door calendar of every site: every booked window on every dock door, inbound and outbound, with no double booking, door hours and closures, ETA risk and no-shows. Built on develop, not deployed.</p>
         <div className={styles.buttons}>
           <Link className="button button--primary button--lg" to="/docs/overview/introduction">
             Read the docs

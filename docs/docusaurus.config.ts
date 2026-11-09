@@ -6,7 +6,7 @@ import type * as OpenApiPlugin from 'docusaurus-plugin-openapi-docs';
 const config: Config = {
   title: 'Dock Scheduling',
   tagline:
-    'Dock Scheduling: a Supporting bounded context of the WMS domain (warehouse-systems).',
+    'The door calendar of the warehouse fleet: a Supporting bounded context of the WMS tier (yard domain).',
   favicon: 'img/favicon.svg',
 
   future: {
