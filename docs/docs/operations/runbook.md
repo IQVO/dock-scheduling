@@ -7,9 +7,26 @@ description: "Deploying and operating dock-scheduling: Helm chart, probes, migra
 
 # Runbook
 
-Status: **built on develop, not deployed.** `terraform/apps.yaml` in `warehouse-infra` (`origin/develop`) has no `dock-scheduling` entry and there is no `helm-values/dock-scheduling.yaml`, so nothing in the reference cluster runs this service yet. Everything below is what the chart and the binaries do when it is deployed; the first deployment also needs the [pre-release checklist](/docs/operations/before-first-release).
+Status: **built on develop, registered in warehouse-infra develop, not applied to the cluster.** `terraform/apps.yaml` in `warehouse-infra` (`origin/develop`) has a `dock-scheduling` entry, `helm-values/dock-scheduling.yaml` exists, and the image is pinned, but `kubectl get pods -n warehouse-systems` lists no `dock-scheduling` pod (checked 2026-11-09), so nothing in the reference cluster runs this service yet. Everything below is what the chart and the binaries do once the application is applied; see [Registration in warehouse-infra](#registration-in-warehouse-infra) for what is already wired and the [pre-release checklist](/docs/operations/before-first-release).
 
 Source: `charts/dock-scheduling/`, `cmd/*`, `internal/adapters/**`.
+
+## Registration in warehouse-infra
+
+Registered by `warehouse-infra` PR 193 (commit `b4b827e`, "register dock-scheduling and yard-management on k3s"); the image was pinned by commit `c42c475`. Read from `origin/develop`:
+
+| Item | State in `warehouse-infra` develop |
+|---|---|
+| `terraform/apps.yaml` | Entry `dock-scheduling`: `kind: service`, `repo_owner: IQVO`, `database: true`, `analytics: true` (the default key pair `ANALYTICS_DATABASE_URL` and `ANALYTICS_READER_DATABASE_URL`), no web part. |
+| Image | `terraform/targets/k3s.images.yaml` pins `dock-scheduling` at tag `7f20813-arm64`, the commit of this repository's `v0.1.1` tag (also on `origin/main`). |
+| Helm values | `helm-values/dock-scheduling.yaml` sets four stable consumer groups: `dock-scheduling-yard`, `dock-scheduling-facility`, `dock-scheduling-asn`, `dock-scheduling-cpt`; the projector group `dock-scheduling-analytics`; `existingSecret` wiring for `dock-scheduling-db` and `dock-scheduling-analytics-db`; the dedicated relay on (`relay.enabled: true`, redundant beside the inline relay of `cmd/api`); MCP on; analytics on; sweeps on (`/no-show-sweeps` every 5 minutes by CronJob); Kong plugins `cors`, `opentelemetry`, `prometheus`; no A2A block. The legacy importer group `config.dockLegacyImportConsumerGroup` is empty, so strangler stage A is off. |
+| Kong routes | `/api/dock-scheduling` (prefix stripped), `/api/mcp/dock-scheduling` (to `/mcp`), `/api/dock-scheduling/reports` (to `/reports`). |
+| Observability | One dashboard and six alert rules: see [Observability](/docs/operations/observability#dashboards-and-alerts). |
+| CI | `warehouse-infra` lints the chart and runs its selector check for this service. |
+| Kafka topics | `docs/kafka-topics-yard-dock.md` in `warehouse-infra` says the yard-domain topics must be pre-created, idempotently, **before the first sync** (`scripts/tf.sh app dock-scheduling apply`): a kafka-go group consumer started before its topic exists is never handed the partition. Topics: `warehouse.dock-scheduling.events`, `warehouse.dock-scheduling.analytics`, `warehouse.yard-management.events`, `warehouse.yard-management.analytics`, `warehouse.facility.events`, `warehouse.inbound-receiving.events`, `warehouse.process-path-management.events`. |
+| Cluster | Not applied: no `dock-scheduling` pod exists. Until it is, no integration edge of this service is live (see [Integration](/docs/ecosystem/integration#edge-status)). |
+
+The ADR bodies in `docs/adr/` are not edited by this status update: any sentence in them about the platform state says what it said when it was written.
 
 ## Workloads
 

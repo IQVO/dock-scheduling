@@ -9,7 +9,7 @@ description: "What dock-scheduling owns and does not own: the door calendar of e
 
 `dock-scheduling` is the **door calendar** of the warehouse fleet. It owns every booked time window on every dock door of a site, inbound and outbound, from the booking through the carrier's arrival to the release of the door, and it keeps the one rule that makes a calendar worth having: **no two active appointments overlap on the same door.**
 
-It is a **Supporting** subdomain of the **WMS** tier, in the yard domain (the area of the fleet around the gate, the yard and the dock doors). Its CloudEvents carry the type prefix `com.warehouse.wms.dock-scheduling.`. The service is **built on develop, not deployed**: nothing is registered for it in `warehouse-infra` yet.
+It is a **Supporting** subdomain of the **WMS** tier, in the yard domain (the area of the fleet around the gate, the yard and the dock doors). Its CloudEvents carry the type prefix `com.warehouse.wms.dock-scheduling.`. The service is **built on develop, registered in warehouse-infra develop, not applied to the cluster**: `terraform/apps.yaml` has a `dock-scheduling` entry, `helm-values/dock-scheduling.yaml`, a dashboard, alert rules and an image pin exist there, but no pod of it runs yet (see [Runbook](/docs/operations/runbook#registration-in-warehouse-infra)).
 
 Source: `internal/domain/dockappointment`, `internal/domain/dockcalendar`, `internal/application/usecases`, `apis/openapi.yaml`, `apis/asyncapi.yaml`, [ADR 0001](/docs/adr/0001-dock-scheduling-bounded-context).
 

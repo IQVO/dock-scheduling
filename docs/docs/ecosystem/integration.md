@@ -61,6 +61,24 @@ Failure behaviour for consumers is each consumer's own (retry, dead-letter `ware
 | Report readers | REST on `cmd/reports` (`/api/dock-scheduling/reports` behind Kong) | `apis/openapi-reports.yaml`; reads the analytical database only. |
 | Kubernetes CronJob | `POST /no-show-sweeps` via `cmd/sweep` | The only timer; nothing in the service calls the endpoint itself. |
 
+## Edge status
+
+An edge is **live** only when both ends run in the cluster. `dock-scheduling` is registered in `warehouse-infra` develop but not applied (`kubectl get pods -n warehouse-systems` lists no `dock-scheduling` pod, checked 2026-11-09), so **no edge below is live**. The consumer groups are configured in the `warehouse-infra` helm values (`helm-values/dock-scheduling.yaml` and the neighbour's own file); "wired in infra" means the group is configured there. The neighbour column reflects the pods listed by the same command.
+
+| Edge | Direction | Consumer group in `warehouse-infra` | Neighbour in the cluster | Status |
+| --- | --- | --- | --- | --- |
+| `yard-management` | in: `warehouse.yard-management.events` | `dock-scheduling-yard` | no pod (registered, not applied) | wired in infra, not applied |
+| `yard-management` | out: `warehouse.dock-scheduling.events` | `yard-management-dock-scheduling` | no pod (registered, not applied) | wired in infra, not applied |
+| `facility-layout` | in: `warehouse.facility.events` | `dock-scheduling-facility` | pod running | not live: this service is not applied; wired in infra |
+| `inbound-receiving` | in: `warehouse.inbound-receiving.events` | `dock-scheduling-asn` | pod running | not live: this service is not applied; wired in infra |
+| `inbound-receiving` | out: `warehouse.dock-scheduling.events` | `inbound-receiving-dock-appointments` | pod running | not live: this service is not applied; wired in infra |
+| `process-path-management` | in: `warehouse.process-path-management.events` | `dock-scheduling-cpt` | pod running | not live: this service is not applied; wired in infra |
+| `warehouse-planning` | out: `warehouse.dock-scheduling.events` | `warehouse-planning-dock-appointments` | pod running | not live: this service is not applied; wired in infra |
+| `exception-management` | out: `warehouse.dock-scheduling.events` | none: `helm-values/exception-management.yaml` has no dock-scheduling group | pod running | not live, and not wired in infra |
+| `outbound-shipping` | out: `warehouse.dock-scheduling.events` | none: no `warehouse-infra` entry or helm values found for it | no pod | not live, not registered in infra |
+
+The consumers' side of these rows (the event types a neighbour reads) comes from the neighbours' own code, as the tables above say; the "Consumer group" and "Neighbour in the cluster" columns come from `warehouse-infra` `origin/develop` and the cluster listing, not from their code. Each edge becomes live when this service and the neighbour both run, and the yard-domain topics have been pre-created first (see the [Runbook](/docs/operations/runbook#registration-in-warehouse-infra)).
+
 ## Edges that do not exist
 
 - **No outbound calls.** This service calls no sibling over REST, MCP or A2A; there is no HTTP client in `cmd/api`. A booking that needs a door, ASN or cutoff the copies do not hold is refused (`unknown-door`, `unknown-asn`, `missing-outbound-ref`), never looked up synchronously.

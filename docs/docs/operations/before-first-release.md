@@ -59,4 +59,18 @@ Checked against the code of `origin/develop`; the checklist is a record, so re-c
 | 11 | Not verified | Registry access is an org setting; not checked from the repository. |
 | 12 | Not verified | `make vuln` was not run for this page. |
 
-The service is **built on develop, not deployed**: `warehouse-infra` has no `terraform/apps.yaml` entry for it.
+## Platform registration in warehouse-infra
+
+The packaging rows above say nothing of the platform side, which lives in `warehouse-infra`. State on its `origin/develop`:
+
+| Item | State | Evidence |
+|---|---|---|
+| `terraform/apps.yaml` entry (`kind: service`, `database: true`, `analytics: true`, no web part) | Done | `warehouse-infra` PR 193, commit `b4b827e`, entry `dock-scheduling`. |
+| `helm-values/dock-scheduling.yaml` (stable `dock-scheduling-*` consumer groups, `existingSecret` wiring, reports and MCP routes, relay, sweeps, Kong plugins) | Done | PR 193, commit `b4b827e`. |
+| Dashboard and alert rules | Done | PR 193, commit `b4b827e`: `terraform/dashboards/contexts/dock-scheduling.json` and six rules in `terraform/alerting/warehouse-alert-rules.json` (see [Observability](/docs/operations/observability#dashboards-and-alerts)). |
+| Chart lint and selector check in `warehouse-infra` CI | Done | PR 193, commit `b4b827e` (`.github/workflows/ci.yml`, `scripts/check-chart-selectors.py`). |
+| Image pinned | Done | Commit `c42c475` pins `dock-scheduling` at `7f20813-arm64`, this repository's `v0.1.1` commit on `main`. |
+| Yard-domain Kafka topics pre-created before the first sync | Documented, not done | `docs/kafka-topics-yard-dock.md` in `warehouse-infra` (PR 193) gives the command; no pod has been synced, and whether the topics exist on the broker was not checked. |
+| Applied to the k3s cluster | Not done | `kubectl get pods -n warehouse-systems` lists no `dock-scheduling` pod (checked 2026-11-09). |
+
+The service is **built on develop, registered in warehouse-infra develop, not applied to the cluster.** The ADR bodies in `docs/adr/` are not edited by this update.
