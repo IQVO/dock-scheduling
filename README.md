@@ -37,3 +37,19 @@ The documentation site of this service is published at **https://iqvo.github.io/
 | [MCP tools](https://iqvo.github.io/dock-scheduling/docs/mcp/tools) | Every MCP tool, resource and prompt |
 | [Integration](https://iqvo.github.io/dock-scheduling/docs/ecosystem/integration) | Upstreams, downstreams, absent edges |
 | [ADRs](https://iqvo.github.io/dock-scheduling/docs/adr) | The ten architecture decision records |
+
+## Binaries
+
+| Binary | Role |
+| --- | --- |
+| `cmd/api` | REST API, in-process outbox relay and the Kafka consumers |
+| `cmd/mcp` | MCP server over the same use cases |
+| `cmd/projector` | The only writer of the analytical database |
+| `cmd/reports` | Read-only reports over the analytical database |
+| `cmd/relay` | Optional stand-alone outbox relay |
+| `cmd/sweep` | One-shot CronJob entrypoint for the no-show sweep |
+
+Ports, probes and environment variables per binary are on the
+[Architecture](https://iqvo.github.io/dock-scheduling/docs/overview/architecture) and
+[Configuration](https://iqvo.github.io/dock-scheduling/docs/operations/configuration) pages.
+
