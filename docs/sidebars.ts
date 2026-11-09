@@ -109,7 +109,7 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'link',
-          label: '0006 Analytics read side: an analytics stream, a projector and a ',
+          label: '0006 Analytics read side',
           href: '/docs/adr/0006-analytics-read-side',
         },
         {

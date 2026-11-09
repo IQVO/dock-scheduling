@@ -40,7 +40,7 @@ Kafka consumers and writers are constructed without dialling, so a broker outage
 
 `cmd/api` boot: parse config (all missing variables named at once) -> run embedded migrations (retried) -> open the pool, ping (retried) -> build consumers -> listen -> start the relay -> start the consumers.
 
-Shutdown on SIGTERM: `/readyz` flips to 503 -> wait `SHUTDOWN_DRAIN_DELAY` (5 s) -> drain HTTP (<= 10 s) -> stop the consumers (await <= 30 s) -> stop the relay (await <= 30 s, Kafka writer close <= 5 s) -> close the Postgres pool last. The process exits non-zero when the relay, the consumers or the listener stop on their own, so the orchestrator restarts it.
+Shutdown on SIGTERM: `/readyz` flips to 503 -> wait `SHUTDOWN_DRAIN_DELAY` (5 s) -> drain HTTP (up to 10 s) -> stop the consumers (await up to 30 s) -> stop the relay (await up to 30 s, Kafka writer close up to 5 s) -> close the Postgres pool last. The process exits non-zero when the relay, the consumers or the listener stop on their own, so the orchestrator restarts it.
 
 `terminationGracePeriodSeconds` defaults to 40. The values comment budgets 5 + 10 + 10 + 10 s, but the code's await bounds for consumers and relay are 30 s each; a pod that really needs the full bound would be killed first. In practice an idle consumer and relay return in well under a second.
 
