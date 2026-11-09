@@ -21,3 +21,4 @@ acceptance except to correct a wording the later ADR that supersedes it names (A
 | [0007](./0007-mcp-server.md) | MCP server | Accepted |
 | [0008](./0008-rest-adapter-and-api-composition-root.md) | REST adapter and the API composition root | Accepted |
 | [0009](./0009-kafka-consumers.md) | Kafka consumers | Accepted |
+| [0010](./0010-door-reassigned-is-an-integration-event.md) | DockAppointmentDoorReassigned is an integration event | Accepted (2026-11-09) |
