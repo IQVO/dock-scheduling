@@ -165,7 +165,7 @@ func TestRouterKeepsFlusherForEventStreamsAndObservesByRoutePattern(t *testing.T
 			t.Errorf("metrics lack %q:\n%s", want, grep(scrape, "dock_scheduling_http_requests_total"))
 		}
 	}
-	if strings.Contains(scrape, "123") {
+	if strings.Contains(scrape, "other-path-with-an-id") {
 		t.Error("a raw path leaked into a metric label")
 	}
 }
