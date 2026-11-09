@@ -212,7 +212,7 @@ type journey struct {
 	from        time.Time
 	apptID      string
 	// the appointments the Kafka-fed steps drive
-	completed, turnedAway, implicit, asnCancelled, legacy string
+	completed, turnedAway, implicit, asnCancelled, legacy, reassigned string
 }
 
 // TestAPI_RealPostgresAndKafka boots the entry point once and walks the

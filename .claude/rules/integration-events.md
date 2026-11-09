@@ -80,7 +80,7 @@ aggregate id — appointment id, or site id for the dockcalendar rows).
 | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled` | events + analytics | appointment id | `urn:warehouse:dock-scheduling:events:DockAppointmentCancelled:v1` |
 | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow` | events + analytics | appointment id | `urn:warehouse:dock-scheduling:events:DockAppointmentNoShow:v1` |
 | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn` | analytics only | appointment id | `urn:warehouse:dock-scheduling:analytics:DockAppointmentCheckedIn:v1` |
-| `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned` | analytics only | appointment id | `urn:warehouse:dock-scheduling:analytics:DockAppointmentDoorReassigned:v1` |
+| `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned` | events + analytics (ADR 0010) | appointment id | `urn:warehouse:dock-scheduling:events:DockAppointmentDoorReassigned:v1` |
 | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCompleted` | analytics only | appointment id | `urn:warehouse:dock-scheduling:analytics:DockAppointmentCompleted:v1` |
 | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentAtRisk` | analytics only | appointment id | `urn:warehouse:dock-scheduling:analytics:DockAppointmentAtRisk:v1` |
 | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | events (key site_id) + analytics | site id | `urn:warehouse:dock-scheduling:events:DoorClosureScheduled:v1` |

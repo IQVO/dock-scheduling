@@ -64,16 +64,17 @@ const (
 	analyticsOnly
 )
 
-// routeOf is ADR 0004's catalogue. An unknown combination is NOT an error —
+// routeOf is ADR 0004's catalogue (DockAppointmentDoorReassigned joined the
+// integration facts in ADR 0010). An unknown combination is NOT an error —
 // it yields no message (the relay dead-letters such a row instead of
 // retrying it forever).
 func routeOf(entity, event string) route {
 	switch entity {
 	case entityAppointment:
 		switch event {
-		case "DockAppointmentBooked", "DockAppointmentRescheduled", "DockAppointmentCancelled", "DockAppointmentNoShow":
+		case "DockAppointmentBooked", "DockAppointmentRescheduled", "DockAppointmentCancelled", "DockAppointmentNoShow", "DockAppointmentDoorReassigned":
 			return integrationAndAnalytics
-		case "DockAppointmentCheckedIn", "DockAppointmentDoorReassigned", "DockAppointmentCompleted", "DockAppointmentAtRisk":
+		case "DockAppointmentCheckedIn", "DockAppointmentCompleted", "DockAppointmentAtRisk":
 			return analyticsOnly
 		}
 	case entityCalendar:

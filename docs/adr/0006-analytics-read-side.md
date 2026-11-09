@@ -16,8 +16,8 @@ yard model's D-13 report row, `GET /reports/schedule-adherence`).
 
 ### 1. What is published and projected
 
-Every published fact is written to `warehouse.dock-scheduling.analytics`; the analytics-only facts (check-in, door reassignment,
-completion, at-risk, operating hours) go ONLY there (ADR 0004 table). The two outbox rows of an integration fact share ONE CloudEvents
+Every published fact is written to `warehouse.dock-scheduling.analytics`; the analytics-only facts (check-in, completion, at-risk,
+operating hours; the door reassignment is an integration fact since ADR 0010) go ONLY there (ADR 0004 table). The two outbox rows of an integration fact share ONE CloudEvents
 id, `type` and Kafka key (ADR 0005); `dataschema` is `urn:warehouse:dock-scheduling:analytics:<EventName>:v1`. Payloads equal the
 integration payloads, so nothing is added to the wire for the report.
 

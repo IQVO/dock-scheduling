@@ -12,9 +12,10 @@ info:
   description: |
     Event catalog for the **dock-scheduling** bounded context (WMS subdomain): the door calendar of every site (ADR 0001, ADR 0002).
 
-    **Published.** The `DockAppointment` aggregate raises eight events and the `DockCalendar` aggregate three. Eight of the eleven
-    go to `warehouse.dock-scheduling.events`; the analytics-only facts (`DockAppointmentCheckedIn`, `DockAppointmentDoorReassigned`,
-    `DockAppointmentCompleted`, `DockAppointmentAtRisk`, `DoorOperatingHoursDeclared`) go ONLY to `warehouse.dock-scheduling.analytics`.
+    **Published.** The `DockAppointment` aggregate raises eight events and the `DockCalendar` aggregate three. Seven of the eleven
+    go to `warehouse.dock-scheduling.events` (`DockAppointmentDoorReassigned` since ADR 0010); the analytics-only facts
+    (`DockAppointmentCheckedIn`, `DockAppointmentCompleted`, `DockAppointmentAtRisk`, `DoorOperatingHoursDeclared`) go ONLY to
+    `warehouse.dock-scheduling.analytics`, where every published fact also appears as its analytics twin.
     Every fact is written to its stream through a **transactional outbox**: the aggregate row and its already-encoded events commit in
     ONE database transaction and a relay drains them to Kafka (at-least-once; the CloudEvents `id` is stored with the outbox row, so a
     retry republishes the same `id`). Kafka key = appointment id (site id for the calendar events), so one appointment's history stays
@@ -66,7 +67,8 @@ channels:
       description: |
         Route on the full `type` (`com.warehouse.wms.dock-scheduling.dockappointment.<EventName>` and
         `com.warehouse.wms.dock-scheduling.dockcalendar.<EventName>`). `DockAppointmentBooked` and `DockAppointmentRescheduled` carry the
-        site's arrival tolerance; `DockAppointmentCancelled` carries the reason; `DockAppointmentNoShow` is terminal.
+        site's arrival tolerance; `DockAppointmentCancelled` carries the reason; `DockAppointmentNoShow` is terminal;
+        `DockAppointmentDoorReassigned` moves the appointment to the door the trailer actually docked at, window unchanged (ADR 0010).
       tags:
         - name: dockappointment
       message:
@@ -75,6 +77,7 @@ channels:
           - $ref: "#/components/messages/DockAppointmentRescheduled"
           - $ref: "#/components/messages/DockAppointmentCancelled"
           - $ref: "#/components/messages/DockAppointmentNoShow"
+          - $ref: "#/components/messages/DockAppointmentDoorReassigned"
           - $ref: "#/components/messages/DoorClosureScheduled"
           - $ref: "#/components/messages/DoorClosureLifted"
 
@@ -82,7 +85,8 @@ channels:
     description: |
       This service's own analytics stream (ADR 0006), written by the SAME transactional outbox relay as the integration topic: every
       published fact appears here too, under the SAME CloudEvents id and `type`, with only the `dataschema` stream segment different
-      (urn:warehouse:dock-scheduling:analytics:<EventName>:v1); the five analytics-only facts appear ONLY here. It is NOT an integration
+      (urn:warehouse:dock-scheduling:analytics:<EventName>:v1); the four analytics-only facts (`DockAppointmentCheckedIn`,
+      `DockAppointmentCompleted`, `DockAppointmentAtRisk`, `DoorOperatingHoursDeclared`) appear ONLY here. It is NOT an integration
       contract: the only consumer is this service's `cmd/dock-projector` (fixed group from `ANALYTICS_CONSUMER_GROUP`, starting at the
       earliest retained offset), which folds the events into the analytical database; its deterministic poison goes to
       `warehouse.dock-scheduling.analytics.dlq`.
@@ -306,12 +310,26 @@ components:
         - name: dockAppointmentCheckedIn
           summary: "The carrier arrived at the gate (applied from the yard fact)."
           payload: {"specversion": "1.0", "id": "00001008-1111-4222-8333-444455556666", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn", "subject": "appt-123e4567-e89b-12d3-a456-426614174000", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:DockAppointmentCheckedIn:v1", "data": {"appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000", "site_id": "WH1", "door_code": "WH1-DOCK-IN-01", "checked_in_at": "2026-11-06T07:55:00Z", "arrival_status": "ON_TIME", "visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10", "version": 2}}
+    DockAppointmentDoorReassigned:
+      name: DockAppointmentDoorReassigned
+      title: "DockAppointmentDoorReassigned"
+      summary: "The trailer docked at another door than the booked one; the physical fact won."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned`; subject and Kafka key = appointment id. Integration stream (ADR 0010). The window is unchanged; `to_door_code` is the appointment's door from now on. Consumers: inbound-receiving."
+      contentType: application/cloudevents+json
+      tags:
+        - name: dockappointment
+      payload:
+        $ref: "#/components/schemas/DockAppointmentDoorReassignedCloudEvent"
+      examples:
+        - name: dockAppointmentDoorReassigned
+          summary: "The trailer docked at another door than the booked one; the physical fact won."
+          payload: {"specversion": "1.0", "id": "00001020-1111-4222-8333-444455556666", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned", "subject": "appt-123e4567-e89b-12d3-a456-426614174000", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:DockAppointmentDoorReassigned:v1", "data": {"appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000", "site_id": "WH1", "from_door_code": "WH1-DOCK-IN-01", "to_door_code": "WH1-DOCK-IN-02", "version": 3}}
     DockAppointmentDoorReassignedAnalytics:
       x-no-consumer-reason: "analytics twin: consumed by this service's own projector only"
       name: DockAppointmentDoorReassigned
       title: "DockAppointmentDoorReassigned"
       summary: "The trailer docked at another door than the booked one; the physical fact won."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned`; subject and Kafka key = appointment id. Analytics twin (same id and type, dataschema `analytics`). Consumers: analytics only."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned`; subject and Kafka key = appointment id. Analytics twin (same id and type, dataschema `analytics`). Consumers: inbound-receiving."
       contentType: application/cloudevents+json
       tags:
         - name: analytics
@@ -651,6 +669,7 @@ components:
     DockAppointmentNoShowData: {"type": "object", "required": ["appointment_id", "site_id", "door_code", "direction", "carrier_scac", "window_end", "version"], "properties": {"appointment_id": {"type": "string"}, "site_id": {"type": "string"}, "door_code": {"type": "string"}, "direction": {"type": "string", "enum": ["INBOUND", "OUTBOUND"]}, "carrier_scac": {"type": "string", "nullable": true}, "window_end": {"type": "string", "format": "date-time"}, "version": {"type": "integer"}}}
     DockAppointmentCheckedInAnalyticsCloudEvent: {"title": "CloudEvent + DockAppointmentCheckedIn data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:DockAppointmentCheckedIn:v1"]}, "data": {"$ref": "#/components/schemas/DockAppointmentCheckedInData"}}}]}
     DockAppointmentCheckedInData: {"type": "object", "required": ["appointment_id", "site_id", "door_code", "checked_in_at", "arrival_status", "visit_id", "version"], "properties": {"appointment_id": {"type": "string"}, "site_id": {"type": "string"}, "door_code": {"type": "string"}, "checked_in_at": {"type": "string", "format": "date-time"}, "arrival_status": {"type": "string", "enum": ["EARLY", "ON_TIME", "LATE"]}, "visit_id": {"type": "string", "nullable": true}, "version": {"type": "integer"}}}
+    DockAppointmentDoorReassignedCloudEvent: {"title": "CloudEvent + DockAppointmentDoorReassigned data (events stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:events:DockAppointmentDoorReassigned:v1"]}, "data": {"$ref": "#/components/schemas/DockAppointmentDoorReassignedData"}}}]}
     DockAppointmentDoorReassignedAnalyticsCloudEvent: {"title": "CloudEvent + DockAppointmentDoorReassigned data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:DockAppointmentDoorReassigned:v1"]}, "data": {"$ref": "#/components/schemas/DockAppointmentDoorReassignedData"}}}]}
     DockAppointmentDoorReassignedData: {"type": "object", "required": ["appointment_id", "site_id", "from_door_code", "to_door_code", "version"], "properties": {"appointment_id": {"type": "string"}, "site_id": {"type": "string"}, "from_door_code": {"type": "string"}, "to_door_code": {"type": "string"}, "version": {"type": "integer"}}}
     DockAppointmentCompletedAnalyticsCloudEvent: {"title": "CloudEvent + DockAppointmentCompleted data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCompleted"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:DockAppointmentCompleted:v1"]}, "data": {"$ref": "#/components/schemas/DockAppointmentCompletedData"}}}]}

@@ -19,7 +19,7 @@ One booked door window for one carrier visit and ONE trailer (X3). States `BOOKE
 | BOOKED | COMPLETED | RecordDoorRelease (arrival implicit) | DockAppointmentCompleted (analytics) |
 | BOOKED, CHECKED_IN | CANCELLED | CancelAppointment | DockAppointmentCancelled |
 | BOOKED | NO_SHOW | MarkNoShow | DockAppointmentNoShow |
-| BOOKED, CHECKED_IN | same | ReassignDoor | DockAppointmentDoorReassigned (analytics) |
+| BOOKED, CHECKED_IN | same | ReassignDoor | DockAppointmentDoorReassigned (integration + analytics, per ADR 0010) |
 | BOOKED | BOOKED | ReportEta | DockAppointmentAtRisk (analytics, only when late) |
 
 `COMPLETED`, `CANCELLED` and `NO_SHOW` are terminal (D-9: a late carrier books anew). `version` starts at 1 and grows by one per
