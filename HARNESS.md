@@ -32,25 +32,32 @@ three regulation categories: **maintainability**, **architecture fitness**,
 
 | Sensor | Category | Type | Lifecycle | Blocking? | Cost |
 |---|---|---|---|---|---|
-| `make fmt-check` / `lefthook pre-commit` | maintainability | computational | pre-commit | yes (local) | seconds |
-| `lint` (golangci-lint) | maintainability | computational | pre-commit, PR | yes | seconds |
-| `test` (`go test -race`) | maintainability | computational | pre-commit (fast subset), PR | yes | seconds–minutes |
-| `coverage` (90% gate) | maintainability | computational | pre-push, PR | yes | minutes |
-| `bdd` (godog/Gherkin) | behaviour | computational | pre-push, PR | yes | seconds |
-| `arch-test` (arch-go fitness) | architecture fitness | computational | pre-push, PR | yes | seconds |
-| `integration` (testcontainers) | behaviour | computational | PR | yes | minutes |
-| `mutation-fast` (gremlins, one aggregate) | maintainability | computational | PR | yes | ~1 min |
-| `mutation` (gremlins, full domain) | maintainability | computational | weekly schedule | no (advisory report) | tens of minutes |
-| `vuln` (govulncheck) | maintainability | computational | PR | yes | seconds |
-| `api-lint` (Spectral) | maintainability | computational | PR | yes | seconds |
-| `docs-api-drift` | maintainability | computational | PR | yes | seconds |
-| `web` (vitest/tsc/eslint) | maintainability | computational | PR | yes | minutes |
-| `helm-lint` | maintainability | computational | PR (targeting main) | yes | seconds |
-| `trivy-scan` | maintainability | computational | PR (targeting main) | yes (CRITICAL/HIGH w/ fix) | minutes |
-| `CodeQL` | maintainability | computational | PR, schedule | yes (conversation-resolution) | minutes |
-| `Scorecard` | maintainability | computational | schedule | no | minutes |
-| `drift` (deadcode, `go mod tidy -diff`, knip, coverage-quality) | maintainability | computational | weekly schedule | **no — advisory** | minutes |
-| `/code-review`, `/architecture-review`, `/domain-review` | architecture fitness / behaviour | **inferential** | invoked by hand (local-only, per user decision 2026-09-13) | no | LLM cost per invocation |
+| `make fmt-check`, `make vet`, `make lint` (lefthook `pre-commit`) | maintainability | computational | pre-commit | yes (local) | seconds |
+| `make check` (lefthook `pre-push`: fmt-check vet build lint test) | maintainability | computational | pre-push | yes (local) | minutes |
+| `make check-fast` (agent Stop hook: fmt-check, vet, arch-test, changed packages) | maintainability | computational | end of agent turn | yes (agent loop) | seconds |
+| `lint` (golangci-lint) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `guide-lint` (`scripts/harness/guide_lint.py`, `test_hook.py`, `test_red_issue.py`) | maintainability | computational | PR, push to develop/main | no (advisory: `continue-on-error`) | seconds |
+| `complexity` (gocyclo, cyclop, gocognit, nestif, funlen via golangci-lint) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `file-length` (Go files the PR adds or touches) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `test` (`make coverage`: `go test -race`, 90% gate on domain + application) | maintainability | computational | PR, push to develop/main | yes | minutes |
+| `bdd` (godog/Gherkin, `features/`) | behaviour | computational | PR, push to develop/main | yes | seconds |
+| `integration` (testcontainers Postgres/Kafka) | behaviour | computational | PR, push to develop/main | yes | minutes |
+| `mutation-fast` (gremlins on the fast domain-package subset; locally `make mutation`) | maintainability | computational | PR, push to develop/main | yes | minutes |
+| `mutation` (gremlins, full `internal/domain`) | maintainability | computational | weekly schedule (+ manual dispatch) | no (opens/closes a `harness:red` issue) | tens of minutes |
+| `drift` (deadcode, `go mod tidy -diff`, coverage-quality) | maintainability | computational | weekly schedule (+ manual dispatch) | no (opens/closes a `harness:red` issue) | minutes |
+| `api-lint` (Spectral on `apis/`) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `vuln` (govulncheck) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `docs-api-drift` (regenerate `docs/docs/api-reference/rest` from `apis/openapi.yaml`, fail on diff) | maintainability | computational | PR, push to develop/main | yes | minutes |
+| `chart-tests` (`charts/dock-scheduling/tests/*`) | maintainability | computational | PR, push to develop/main | yes | seconds |
+| `arch-test` (`internal/architecture` fitness tests) | architecture fitness | computational | PR, push to develop/main | yes | seconds |
+| `helm-lint` (chart-testing lint of `charts/dock-scheduling` + Service-selector wiring) | maintainability | computational | PR | yes | seconds |
+| `trivy-scan` (image built from `Dockerfile`) | maintainability | computational | PR | yes (CRITICAL/HIGH with a fix) | minutes |
+| `CodeQL` (`codeql.yml`) | maintainability | computational | PR, push, weekly schedule | yes (conversation resolution) | minutes |
+| AI review (`ai-review.yml`, needs `ANTHROPIC_API_KEY`) | maintainability | **inferential** | PR into develop | no (advisory) | API spend |
+| `/code-review`, `/architecture-review`, `/domain-review` (`.claude/agents/`) | architecture fitness / behaviour | **inferential** | invoked by hand | no | LLM cost per invocation |
+
+Every row above is a job in this repo's `.github/workflows/` or a target in its `Makefile`; a sensor not listed here does not run in dock-scheduling.
+Not run here: `web`, because there is no `web/` micro-frontend.
 
 **New sensors default to advisory for ~2 weeks, then auto-promote to
 blocking** (user decision, Phase 5 of the harness-coverage-expansion plan)

@@ -48,6 +48,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: python3 scripts/harness/guide_lint.py
       - run: python3 scripts/harness/test_hook.py
+      - run: python3 scripts/harness/test_red_issue.py
 
 
   # Complexity gate as its own named check: cyclomatic (gocyclo, cyclop),
@@ -308,6 +309,32 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: govulncheck
         run: govulncheck ./...
+
+  docs-api-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm ci
+      - name: Regenerate REST API docs from apis/openapi.yaml
+        run: npm run clean-api-docs dock-scheduling && npm run gen-api-docs dock-scheduling
+      - name: Fail if generated docs differ from what's committed
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- docs/api-reference/rest; then
+            echo "::error::docs/api-reference/rest is out of sync with apis/openapi.yaml." \
+                 "Run 'npm run gen-api-docs dock-scheduling' inside docs/ and commit the result."
+            exit 1
+          fi
+
 
   # ============================================================
   # CLASSIFICATION: PACKAGING (Helm chart tests)
