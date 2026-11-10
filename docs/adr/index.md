@@ -9,7 +9,7 @@ slug: /
 
 Each status below is copied from the ADR body's own `Status:` line, which is the authority; ADR bodies are not edited after
 acceptance except to correct a wording the later ADR that supersedes it names (ADR 0002 A15 now says L3, per ADR 0007; the
-DockAppointmentDoorReassigned rows of ADR 0002 and ADR 0004 and the analytics-only list of ADR 0006 now point to ADR 0010).
+DockAppointmentDoorReassigned rows of ADR 0002 and ADR 0004 and the analytics-only list of ADR 0006 now point to ADR 0010; the legacy-importer text of ADRs 0002, 0003 and 0009 points to ADR 0011).
 
 | ADR | Title | Status |
 | --- | --- | --- |
@@ -23,3 +23,4 @@ DockAppointmentDoorReassigned rows of ADR 0002 and ADR 0004 and the analytics-on
 | [0008](./0008-rest-adapter-and-api-composition-root.md) | REST adapter and the API composition root | Accepted |
 | [0009](./0009-kafka-consumers.md) | Kafka consumers | Accepted |
 | [0010](./0010-door-reassigned-is-an-integration-event.md) | DockAppointmentDoorReassigned is an integration event | Accepted (2026-11-09) |
+| [0011](./0011-legacy-importer-removed.md) | The legacy appointment importer is removed (ADR 0019 stage E, dock-scheduling side) | Accepted (2026-11-10) |

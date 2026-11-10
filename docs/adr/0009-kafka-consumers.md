@@ -4,6 +4,7 @@ Status: Accepted. Implements the consuming side of ADR 0003 (consumed contracts 
 of ADR 0002 / `internal/application/usecases`. Code: `internal/adapters/inbound/kafka`. `cmd/api` (`consumers.go`) wires all five: it calls
 `kafka.GroupsFromEnv` (through `loadConfig`), `kafka.NewTransport`, `kafka.Build` and `kafka.Start`, passes the one `usecases.Service`
 (real `telemetry.Metrics`, system clock and ids) and stops them after the HTTP drain and before the relay.
+Amended in part: the legacy import consumer and `LegacyUseCases` were removed by ADR 0011.
 
 ## Consumers
 
