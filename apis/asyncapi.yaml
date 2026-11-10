@@ -124,9 +124,9 @@ channels:
         - name: consumed
       message:
         oneOf:
-          - $ref: "#/components/messages/ConsumedZoneRegistered"
-          - $ref: "#/components/messages/ConsumedLocationSlotRegistered"
-          - $ref: "#/components/messages/ConsumedLocationSlotDecommissioned"
+          - $ref: "#/components/messages/ZoneRegistered"
+          - $ref: "#/components/messages/LocationSlotRegistered"
+          - $ref: "#/components/messages/LocationSlotDecommissioned"
 
   warehouse.inbound-receiving.events:
     description: |
@@ -140,8 +140,8 @@ channels:
         - name: consumed
       message:
         oneOf:
-          - $ref: "#/components/messages/ConsumedASNRegistered"
-          - $ref: "#/components/messages/ConsumedASNCancelled"
+          - $ref: "#/components/messages/ASNRegistered"
+          - $ref: "#/components/messages/ASNCancelled"
           - $ref: "#/components/messages/ConsumedDockAppointmentBooked"
           - $ref: "#/components/messages/ConsumedDockAppointmentCheckedIn"
           - $ref: "#/components/messages/ConsumedDockAppointmentCancelled"
@@ -158,7 +158,7 @@ channels:
       tags:
         - name: consumed
       message:
-        $ref: "#/components/messages/ConsumedCPTScheduleChanged"
+        $ref: "#/components/messages/CPTScheduleChanged"
 
   warehouse.yard-management.events:
     description: |
@@ -172,10 +172,10 @@ channels:
         - name: consumed
       message:
         oneOf:
-          - $ref: "#/components/messages/ConsumedVisitCheckedIn"
-          - $ref: "#/components/messages/ConsumedVisitRejected"
-          - $ref: "#/components/messages/ConsumedTrailerDocked"
-          - $ref: "#/components/messages/ConsumedTrailerUndocked"
+          - $ref: "#/components/messages/VisitCheckedIn"
+          - $ref: "#/components/messages/VisitRejected"
+          - $ref: "#/components/messages/TrailerDocked"
+          - $ref: "#/components/messages/TrailerUndocked"
 
 components:
   messages:
@@ -442,7 +442,7 @@ components:
         - name: doorOperatingHoursDeclared
           summary: "The site's operating-hours rows were replaced."
           payload: {"specversion": "1.0", "id": "00001010-1111-4222-8333-444455556666", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared", "subject": "WH1", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:DoorOperatingHoursDeclared:v1", "data": {"site_id": "WH1", "door_code": null, "operating_hours": [{"door_code": null, "weekday": "MON", "opens_at": "06:00", "closes_at": "22:00", "timezone": "America/Sao_Paulo"}], "version": 2}}
-    ConsumedZoneRegistered:
+    ZoneRegistered:
       name: ZoneRegistered
       title: "ZoneRegistered (from facility-layout)"
       summary: "Consumed from facility-layout."
@@ -456,7 +456,7 @@ components:
         - name: zoneRegistered
           summary: "Consumed from facility-layout."
           payload: {"specversion": "1.0", "id": "00001011-1111-4222-8333-444455556666", "source": "/warehouse/facility-layout", "type": "com.warehouse.wms.facility-layout.zone.ZoneRegistered", "subject": "zone-WH1-DOCK", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:facility-layout:events:ZoneRegistered:v1", "data": {"zoneId": "zone-WH1-DOCK", "siteCode": "WH1", "eventName": "ZoneRegistered", "occurredAt": "2026-10-01T08:00:00Z"}}
-    ConsumedLocationSlotRegistered:
+    LocationSlotRegistered:
       name: LocationSlotRegistered
       title: "LocationSlotRegistered (from facility-layout)"
       summary: "Consumed from facility-layout."
@@ -470,7 +470,7 @@ components:
         - name: locationSlotRegistered
           summary: "Consumed from facility-layout."
           payload: {"specversion": "1.0", "id": "00001012-1111-4222-8333-444455556666", "source": "/warehouse/facility-layout", "type": "com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered", "subject": "zone-WH1-DOCK", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:facility-layout:events:LocationSlotRegistered:v1", "data": {"locationCode": "WH1-DOCK-IN-01", "zoneId": "zone-WH1-DOCK", "role": "Dock", "dockFlow": "Both", "eventName": "LocationSlotRegistered", "occurredAt": "2026-10-01T08:01:00Z"}}
-    ConsumedLocationSlotDecommissioned:
+    LocationSlotDecommissioned:
       name: LocationSlotDecommissioned
       title: "LocationSlotDecommissioned (from facility-layout)"
       summary: "Consumed from facility-layout."
@@ -484,7 +484,7 @@ components:
         - name: locationSlotDecommissioned
           summary: "Consumed from facility-layout."
           payload: {"specversion": "1.0", "id": "00001013-1111-4222-8333-444455556666", "source": "/warehouse/facility-layout", "type": "com.warehouse.wms.facility-layout.locationslot.LocationSlotDecommissioned", "subject": "WH1-DOCK-IN-01", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:facility-layout:events:LocationSlotDecommissioned:v1", "data": {"locationCode": "WH1-DOCK-IN-01", "eventName": "LocationSlotDecommissioned", "occurredAt": "2026-10-02T08:00:00Z"}}
-    ConsumedASNRegistered:
+    ASNRegistered:
       name: ASNRegistered
       title: "ASNRegistered (from inbound-receiving)"
       summary: "Consumed from inbound-receiving."
@@ -498,7 +498,7 @@ components:
         - name: aSNRegistered
           summary: "Consumed from inbound-receiving."
           payload: {"specversion": "1.0", "id": "00001014-1111-4222-8333-444455556666", "source": "/warehouse/inbound-receiving", "type": "com.warehouse.wms.inbound-receiving.asn.ASNRegistered", "subject": "ASN-1001", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:inbound-receiving:events:ASNRegistered:v1", "data": {"asn_number": "ASN-1001", "supplier_ref": "ACME", "expected_arrival": "2026-11-06T08:00:00Z", "lines": [{"line_no": 1, "sku": "SKU-1", "expected_qty": 40}]}}
-    ConsumedASNCancelled:
+    ASNCancelled:
       name: ASNCancelled
       title: "ASNCancelled (from inbound-receiving)"
       summary: "Consumed from inbound-receiving."
@@ -568,7 +568,7 @@ components:
         - name: dockAppointmentCompleted
           summary: "Consumed from inbound-receiving."
           payload: {"specversion": "1.0", "id": "00001019-1111-4222-8333-444455556666", "source": "/warehouse/inbound-receiving", "type": "com.warehouse.wms.inbound-receiving.dockappointment.DockAppointmentCompleted", "subject": "appt-223e4567-e89b-12d3-a456-426614174009", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:inbound-receiving:events:DockAppointmentCompleted:v1", "data": {"appointment_id": "appt-223e4567-e89b-12d3-a456-426614174009", "door_code": "WH1-DOCK-IN-01", "completed_at": "2026-11-06T13:30:00Z"}}
-    ConsumedCPTScheduleChanged:
+    CPTScheduleChanged:
       name: CPTScheduleChanged
       title: "CPTScheduleChanged (from process-path-management)"
       summary: "Consumed from process-path-management."
@@ -582,7 +582,7 @@ components:
         - name: cPTScheduleChanged
           summary: "Consumed from process-path-management."
           payload: {"specversion": "1.0", "id": "0000101a-1111-4222-8333-444455556666", "source": "/warehouse/process-path-management", "type": "com.warehouse.wes.process-path-management.cptschedule.CPTScheduleChanged", "subject": "WH1", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:process-path-management:events:CPTScheduleChanged:v1", "data": {"site_id": "WH1", "timezone": "America/Sao_Paulo", "cutoffs": [{"cpt_id": "WH1-1500", "local_time": "15:00", "days_of_week": ["Mon", "Tue"], "ship_method": "ground", "eligible_path_ids": ["PICK", "PACK"]}]}}
-    ConsumedVisitCheckedIn:
+    VisitCheckedIn:
       name: VisitCheckedIn
       title: "VisitCheckedIn (from yard-management)"
       summary: "Consumed from yard-management."
@@ -596,7 +596,7 @@ components:
         - name: visitCheckedIn
           summary: "Consumed from yard-management."
           payload: {"specversion": "1.0", "id": "0000101b-1111-4222-8333-444455556666", "source": "/warehouse/yard-management", "type": "com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn", "subject": "appt-123e4567-e89b-12d3-a456-426614174000", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:yard-management:events:VisitCheckedIn:v1", "data": {"visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10", "site_id": "WH1", "carrier": "ACME Freight", "carrier_scac": "ACMF", "purpose": "LIVE_UNLOAD", "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000", "trailers": [], "arrived_at": "2026-11-06T07:55:00Z", "version": 1}}
-    ConsumedVisitRejected:
+    VisitRejected:
       name: VisitRejected
       title: "VisitRejected (from yard-management)"
       summary: "Consumed from yard-management."
@@ -610,7 +610,7 @@ components:
         - name: visitRejected
           summary: "Consumed from yard-management."
           payload: {"specversion": "1.0", "id": "0000101c-1111-4222-8333-444455556666", "source": "/warehouse/yard-management", "type": "com.warehouse.wms.yard-management.yardvisit.VisitRejected", "subject": "appt-123e4567-e89b-12d3-a456-426614174000", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:yard-management:events:VisitRejected:v1", "data": {"visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10", "site_id": "WH1", "carrier_scac": "ACMF", "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000", "reason": "NO_APPOINTMENT", "rejected_at": "2026-11-06T07:56:00Z"}}
-    ConsumedTrailerDocked:
+    TrailerDocked:
       name: TrailerDocked
       title: "TrailerDocked (from yard-management)"
       summary: "Consumed from yard-management."
@@ -624,7 +624,7 @@ components:
         - name: trailerDocked
           summary: "Consumed from yard-management."
           payload: {"specversion": "1.0", "id": "0000101d-1111-4222-8333-444455556666", "source": "/warehouse/yard-management", "type": "com.warehouse.wms.yard-management.trailer.TrailerDocked", "subject": "appt-123e4567-e89b-12d3-a456-426614174000", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:yard-management:events:TrailerDocked:v1", "data": {"trailer_id": "trl-5f3a9c1e-2b7d-4e68-9a41-0c8d7e6f5a32", "site_id": "WH1", "door_code": "WH1-DOCK-IN-01", "appointment_id": "appt-123e4567-e89b-12d3-a456-426614174000", "asn_numbers": ["ASN-1001"], "visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10", "docked_at": "2026-11-06T08:10:00Z", "version": 3}}
-    ConsumedTrailerUndocked:
+    TrailerUndocked:
       name: TrailerUndocked
       title: "TrailerUndocked (from yard-management)"
       summary: "Consumed from yard-management."
