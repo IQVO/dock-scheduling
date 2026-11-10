@@ -392,7 +392,6 @@ func TestAsn_ReplayedAndUnknownTypesAreHarmless(t *testing.T) {
 	w.handle(asn, fixture(t, "inbound_ASNCancelled"))
 	w.handle(asn, fixture(t, "inbound_ASNCancelled")) // the same id again
 	w.handle(asn, typeOf(t, "inbound_ASNCancelled", "com.warehouse.wms.inbound-receiving.asn.ASNClosed"))
-	w.handle(asn, fixture(t, "inbound_DockAppointmentBooked")) // legacy types are not this consumer's
 	w.wantState(fixtureAppointment, "CANCELLED")
 }
 
@@ -456,100 +455,12 @@ func TestCutoff_MalformedPayloadsArePoison(t *testing.T) {
 	}
 }
 
-// ---- legacy importer -------------------------------------------------------
-
-func (w *world) seedLegacyDoor() {
-	w.t.Helper()
-	fac := w.facility()
-	w.handle(fac, fixture(w.t, "facility_ZoneRegistered"))
-	w.handle(fac, withData(w.t, "facility_LocationSlotRegistered", eventIDFor(120), map[string]any{"locationCode": legacyDoor}))
-}
-
-func TestLegacy_ImportsOnceAndAppliesTheLaterEvents(t *testing.T) {
-	w := newWorld(t)
-	w.seedLegacyDoor()
-	leg := w.legacy()
-
-	w.handle(leg, fixture(t, "inbound_DockAppointmentBooked"))
-	s := w.wantState(legacyAppointment, "BOOKED")
-	if s.Provenance != "legacy-import" || s.Door != legacyDoor {
-		t.Fatalf("imported = %+v", s)
-	}
-	// the same appointment under another event id imports nothing twice
-	w.handle(leg, withID(t, "inbound_DockAppointmentBooked", eventIDFor(121)))
-	if w.metrics.Ignored("already_applied") != 1 {
-		t.Fatalf("already applied = %d, want the second import ignored", w.metrics.Ignored("already_applied"))
-	}
-	w.handle(leg, fixture(t, "inbound_DockAppointmentCheckedIn"))
-	w.wantState(legacyAppointment, "CHECKED_IN")
-	w.handle(leg, fixture(t, "inbound_DockAppointmentCompleted"))
-	w.wantState(legacyAppointment, "COMPLETED")
-}
-
-func TestLegacy_CancelledImportsAsCarrierRequest(t *testing.T) {
-	w := newWorld(t)
-	w.seedLegacyDoor()
-	leg := w.legacy()
-	w.handle(leg, fixture(t, "inbound_DockAppointmentBooked"))
-	w.handle(leg, fixture(t, "inbound_DockAppointmentCancelled"))
-	if s := w.wantState(legacyAppointment, "CANCELLED"); s.Reason != "CARRIER_REQUEST" {
-		t.Fatalf("reason = %s, want CARRIER_REQUEST", s.Reason)
-	}
-}
-
-func TestLegacy_OutOfOrderAndUnknownAppointmentsAreIgnoredAndCounted(t *testing.T) {
-	w := newWorld(t)
-	leg := w.legacy()
-	// the CheckedIn of an appointment never imported
-	w.handle(leg, fixture(t, "inbound_DockAppointmentCheckedIn"))
-	// the Booked of a door whose zone/slot has not arrived
-	w.handle(leg, fixture(t, "inbound_DockAppointmentBooked"))
-	if w.metrics.Ignored("unknown_appointment") != 1 || w.metrics.Ignored("unknown_door") != 1 {
-		t.Fatalf("unknown appointment=%d unknown door=%d, want one of each",
-			w.metrics.Ignored("unknown_appointment"), w.metrics.Ignored("unknown_door"))
-	}
-}
-
-func TestLegacy_NeverTouchesANativeAppointment(t *testing.T) {
-	w := newWorld(t)
-	w.seedBooked()
-	leg := w.legacy()
-	w.handle(leg, withData(t, "inbound_DockAppointmentCancelled", eventIDFor(140), map[string]any{"appointment_id": fixtureAppointment}))
-	w.wantState(fixtureAppointment, "BOOKED")
-	if w.metrics.Ignored("not_legacy_import") != 1 {
-		t.Fatalf("not-legacy facts = %d, want 1", w.metrics.Ignored("not_legacy_import"))
-	}
-}
-
-func TestLegacy_MalformedPayloadsArePoison(t *testing.T) {
-	w := newWorld(t)
-	w.seedLegacyDoor()
-	leg := w.legacy()
-	cases := map[string][]byte{
-		"data is a bool":         variant(t, "inbound_DockAppointmentBooked", func(env, _ map[string]any) { env["data"] = true }),
-		"booked without id":      withData(t, "inbound_DockAppointmentBooked", eventIDFor(150), map[string]any{"appointment_id": ""}),
-		"booked without door":    withData(t, "inbound_DockAppointmentBooked", eventIDFor(151), map[string]any{"door_code": ""}),
-		"booked without window":  withData(t, "inbound_DockAppointmentBooked", eventIDFor(152), map[string]any{"window_start": ""}),
-		"booked bad window end":  withData(t, "inbound_DockAppointmentBooked", eventIDFor(153), map[string]any{"window_end": "later"}),
-		"checked in without id":  withData(t, "inbound_DockAppointmentCheckedIn", eventIDFor(154), map[string]any{"appointment_id": ""}),
-		"checked in bad time":    withData(t, "inbound_DockAppointmentCheckedIn", eventIDFor(155), map[string]any{"checked_in_at": "x"}),
-		"cancelled without id":   withData(t, "inbound_DockAppointmentCancelled", eventIDFor(156), map[string]any{"appointment_id": ""}),
-		"completed without id":   withData(t, "inbound_DockAppointmentCompleted", eventIDFor(157), map[string]any{"appointment_id": ""}),
-		"completed bad time":     withData(t, "inbound_DockAppointmentCompleted", eventIDFor(158), map[string]any{"completed_at": "x"}),
-		"invalid door code":      withData(t, "inbound_DockAppointmentBooked", eventIDFor(159), map[string]any{"door_code": "bad door"}),
-		"invalid appointment id": withData(t, "inbound_DockAppointmentBooked", eventIDFor(160), map[string]any{"appointment_id": "not-an-appointment-id"}),
-	}
-	for name, raw := range cases {
-		t.Run(name, func(t *testing.T) { assertPoison(t, leg.HandleMessage(context.Background(), raw)) })
-	}
-}
-
 // ---- every consumer: the retired flat envelope ------------------------------
 
 func TestEveryConsumer_RejectsTheRetiredFlatEnvelopeWithoutHandling(t *testing.T) {
 	w := newWorld(t)
 	flat := []byte(`{"event_id":"e-flat","event_type":"TrailerDocked","occurred_at":"2026-11-05T14:10:00Z","trailer_id":"t","site_id":"WH1","door_code":"D"}`)
-	for _, c := range []*Consumer{w.yard(), w.facility(), w.asn(), w.cutoff(), w.legacy()} {
+	for _, c := range []*Consumer{w.yard(), w.facility(), w.asn(), w.cutoff()} {
 		if err := c.HandleMessage(context.Background(), flat); err != nil {
 			t.Fatalf("%s: %v, want the flat message skipped (WARN, commit past)", c.Name, err)
 		}
@@ -587,34 +498,16 @@ func TestConstructors_ARequiredReaderFactoryIsChecked(t *testing.T) {
 
 func TestConstructors_ReadTheDocumentedTopicsUnderTheirGroups(t *testing.T) {
 	w := newWorld(t)
-	cs, err := Build(w.tr, Groups{Yard: "y", Facility: "f", Asn: "a", Cpt: "c", LegacyImport: "l"}, w.svc)
+	cs, err := Build(w.tr, Groups{Yard: "y", Facility: "f", Asn: "a", Cpt: "c"}, w.svc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := [][2]string{
 		{"warehouse.yard-management.events", "y"}, {"warehouse.facility.events", "f"},
 		{"warehouse.inbound-receiving.events", "a"}, {"warehouse.process-path-management.events", "c"},
-		{"warehouse.inbound-receiving.events", "l"},
 	}
-	if len(cs) != 5 || !slices.Equal(w.ft.asked, want) {
+	if len(cs) != 4 || !slices.Equal(w.ft.asked, want) {
 		t.Fatalf("consumers=%d readers=%v, want %v", len(cs), w.ft.asked, want)
-	}
-}
-
-func TestLegacyImporter_IsOffWhenItsGroupIsUnset(t *testing.T) {
-	w := newWorld(t)
-	c, err := NewLegacyImportConsumer(w.tr, "", w.svc)
-	if c != nil || err != nil || len(w.ft.asked) != 0 {
-		t.Fatalf("consumer=%v err=%v readers=%v, want it off and no reader built", c, err, w.ft.asked)
-	}
-	cs, err := Build(w.tr, Groups{Yard: "y", Facility: "f", Asn: "a", Cpt: "c"}, w.svc)
-	if err != nil || len(cs) != 4 {
-		t.Fatalf("Build without the legacy group: %d consumers err=%v, want 4", len(cs), err)
-	}
-	for _, c := range cs {
-		if c.Name == "legacy import consumer" {
-			t.Fatal("the importer was built with its group unset")
-		}
 	}
 }
 
@@ -633,11 +526,7 @@ func TestGroupsFromEnv(t *testing.T) {
 	env := map[string]string{EnvYardGroup: " y ", EnvFacilityGroup: "f", EnvAsnGroup: "a", EnvCptGroup: "c"}
 	g, err := GroupsFromEnv(func(k string) string { return env[k] })
 	if err != nil || g != (Groups{Yard: "y", Facility: "f", Asn: "a", Cpt: "c"}) {
-		t.Fatalf("groups = %+v err=%v, want the legacy group empty (importer off)", g, err)
-	}
-	env[EnvLegacyImportGroup] = "legacy"
-	if g, _ = GroupsFromEnv(func(k string) string { return env[k] }); g.LegacyImport != "legacy" {
-		t.Fatalf("legacy group = %q", g.LegacyImport)
+		t.Fatalf("groups = %+v err=%v", g, err)
 	}
 	delete(env, EnvYardGroup)
 	delete(env, EnvCptGroup)

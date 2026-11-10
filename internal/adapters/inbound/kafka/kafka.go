@@ -1,7 +1,6 @@
 // Package kafka holds this service's INBOUND Kafka consumers (ADR 0003, ADR
 // 0009): yard-management facts, facility-layout doors and zones,
-// inbound-receiving ASNs, process-path-management cutoffs and the optional
-// legacy appointment importer. Every consumer decodes CloudEvents 1.0 only,
+// inbound-receiving ASNs and process-path-management cutoffs. Every consumer decodes CloudEvents 1.0 only,
 // via internal/adapters/kafka/cloudevents, and dispatches on the FULL `type`
 // string. The consumers only decode and map: every effect is a Consume* use
 // case of internal/application/usecases, which claims the CloudEvents id in

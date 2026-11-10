@@ -33,8 +33,6 @@ const (
 	fixtureDoor        = "WH1-DOCK-D01"
 	fixtureSite        = "WH1"
 	fixtureASN         = "ASN-1001"
-	legacyAppointment  = "appt-123e4567-e89b-12d3-a456-426614174000"
-	legacyDoor         = "WH1-DOCK-IN-01"
 )
 
 // The yard example's day: arrived 14:02, docked 14:10, undocked 15:30.
@@ -283,10 +281,6 @@ func (w *world) asn() *Consumer {
 }
 func (w *world) cutoff() *Consumer {
 	c, err := NewCutoffConsumer(w.tr, "cpt-group", w.svc)
-	return mustConsumer(w.t, c, err)
-}
-func (w *world) legacy() *Consumer {
-	c, err := NewLegacyImportConsumer(w.tr, "legacy-group", w.svc)
 	return mustConsumer(w.t, c, err)
 }
 

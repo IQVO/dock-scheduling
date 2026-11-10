@@ -39,7 +39,7 @@ type Factory func(t *testing.T) Env
 func Run(t *testing.T, f Factory) {
 	t.Helper()
 	for name, fn := range map[string]func(*testing.T, Factory){
-		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "legacy-backstops": runLegacyBackstops, "door-override": runDoorOverride, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
+		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "door-override": runDoorOverride, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
 		"calendar-updates": runCalendarUpdates, "doors": runDoors, "door-updates": runDoorUpdates, "asns": runAsns, "cutoffs": runCutoffs, "claims": runClaims, "idempotency": runIdempotency, "rollback": runRollback,
 	} {
 		t.Run(name, func(t *testing.T) { fn(t, f) })

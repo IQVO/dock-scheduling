@@ -29,8 +29,7 @@ type consumerSet struct {
 	done chan struct{}
 }
 
-// buildConsumers constructs the yard, facility, ASN and CPT consumers, plus the
-// legacy importer when DOCK_LEGACY_IMPORT_CONSUMER_GROUP is set. Constructing
+// buildConsumers constructs the yard, facility, ASN and CPT consumers. Constructing
 // them never dials, so a broker outage never blocks boot (/readyz reports it).
 // A blank mandatory group is an error naming its *_CONSUMER_GROUP variable.
 func buildConsumers(cfg apiConfig, svc *usecases.Service, logger *slog.Logger) (*consumerSet, error) {

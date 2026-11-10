@@ -26,7 +26,7 @@ import (
 
 // The REAL composition root against REAL infrastructure, both from
 // testcontainers: run(ctx) reads the environment exactly as in production,
-// migrates a fresh Postgres, runs all five Kafka consumers, serves the REST
+// migrates a fresh Postgres, runs all four Kafka consumers, serves the REST
 // router and drains the outbox to a real broker. It is driven only through REST
 // and Kafka: the doors, zones and ASNs, the gate arrival, the dock and the door
 // release, a rejected visit and an out-of-order release all arrive as
@@ -212,7 +212,7 @@ type journey struct {
 	from        time.Time
 	apptID      string
 	// the appointments the Kafka-fed steps drive
-	completed, turnedAway, implicit, asnCancelled, legacy, reassigned string
+	completed, turnedAway, implicit, asnCancelled, reassigned string
 }
 
 // TestAPI_RealPostgresAndKafka boots the entry point once and walks the
@@ -248,7 +248,7 @@ func TestAPI_RealPostgresAndKafka(t *testing.T) {
 	t.Run("an empty no-show sweep answers 200", j.sweep)
 	t.Run("the schedule-adherence report is not served by the OLTP API", j.report)
 	t.Run("the relay publishes the exact CloudEvents to both topics and the outbox drains", j.publishedEvents)
-	t.Run("yard, ASN and legacy facts through Kafka drive the appointments", j.facts)
+	t.Run("yard and ASN facts through Kafka drive the appointments", j.facts)
 	t.Run("the fact-driven transitions publish their events", j.factEvents)
 	t.Run("the analytics projection counts the arrivals the service published", j.adherence)
 	t.Run("stopping Kafka turns /readyz into a dependency-unavailable problem", j.kafkaOutage)

@@ -31,8 +31,7 @@ type apiConfig struct {
 // sink (fleet decision 2026-10-17): a missing DATABASE_URL, KAFKA_BROKERS or
 // consumer group (YARD_, FACILITY_, ASN_ and CPT_CONSUMER_GROUP) is a boot
 // error naming the variable, and every missing variable is named at once.
-// DOCK_LEGACY_IMPORT_CONSUMER_GROUP is the one optional group: unset keeps the
-// strangler stage A importer off. The tuning knobs fall back to their defaults
+// The tuning knobs fall back to their defaults
 // with a warning, so a typo never silently disables the attempt cap.
 func loadConfig(getenv func(string) string, logger *slog.Logger) (apiConfig, error) {
 	cfg := apiConfig{

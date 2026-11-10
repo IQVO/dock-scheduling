@@ -22,7 +22,7 @@ const analyticsGroup = "it-analytics"
 // adherence proves the analytics read side against what the REAL service
 // published: the analytics topic the relay filled during this journey (a
 // booking, a gate arrival and its door release, an arrival implied by a door
-// release, a turned-away visit, an ASN cancellation, a legacy import) is folded
+// release, a turned-away visit, an ASN cancellation) is folded
 // by the projector's consumer into a fresh analytical database, and the report
 // counts exactly the two arrivals - the checked-in one by its status and the
 // implicit one as ON_TIME (X6) - while cancelled and merely booked appointments
