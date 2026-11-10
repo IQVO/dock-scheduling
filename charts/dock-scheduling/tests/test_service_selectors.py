@@ -39,7 +39,6 @@ GROUPS = [
 ]
 BASE = DB + KAFKA + GROUPS
 ENABLE_EVERYTHING = BASE + [
-    "--set", "config.dockLegacyImportConsumerGroup=dock-scheduling-legacy-import",
     "--set", "mcp.enabled=true",
     "--set", "relay.enabled=true",
     "--set", "analytics.enabled=true",
@@ -59,7 +58,7 @@ WANT_ENV: dict[str, set[str]] = {
     RELEASE: {  # cmd/api
         "HTTP_ADDR", "LOG_LEVEL", "DATABASE_URL", "MIGRATIONS_DATABASE_URL", "KAFKA_BROKERS",
         "YARD_CONSUMER_GROUP", "FACILITY_CONSUMER_GROUP", "ASN_CONSUMER_GROUP", "CPT_CONSUMER_GROUP",
-        "DOCK_LEGACY_IMPORT_CONSUMER_GROUP", "OUTBOX_RELAY_INTERVAL", "OUTBOX_BATCH_SIZE",
+        "OUTBOX_RELAY_INTERVAL", "OUTBOX_BATCH_SIZE",
         "OUTBOX_MAX_ATTEMPTS", "SHUTDOWN_DRAIN_DELAY", "ENVIRONMENT", "SERVICE_VERSION",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
     },
@@ -83,7 +82,7 @@ WANT_ENV: dict[str, set[str]] = {
 # Required on the everything-set render (set through values), so a rename in
 # values.yaml cannot silently stop rendering a var the binary reads.
 REQUIRED_WHEN_SET = {
-    RELEASE: {"DOCK_LEGACY_IMPORT_CONSUMER_GROUP", "OUTBOX_RELAY_INTERVAL", "OUTBOX_BATCH_SIZE",
+    RELEASE: {"OUTBOX_RELAY_INTERVAL", "OUTBOX_BATCH_SIZE",
               "OUTBOX_MAX_ATTEMPTS", "SHUTDOWN_DRAIN_DELAY"},
     f"{RELEASE}-mcp": {"SHUTDOWN_DRAIN_DELAY"},
     f"{RELEASE}-relay": {"OUTBOX_RELAY_INTERVAL", "OUTBOX_BATCH_SIZE", "OUTBOX_MAX_ATTEMPTS"},

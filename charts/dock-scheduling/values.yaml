@@ -144,10 +144,6 @@ config:
   facilityConsumerGroup: ""          # FACILITY_CONSUMER_GROUP
   asnConsumerGroup: ""               # ASN_CONSUMER_GROUP
   cptConsumerGroup: ""               # CPT_CONSUMER_GROUP
-  # DOCK_LEGACY_IMPORT_CONSUMER_GROUP: the strangler stage A importer's group
-  # (ADR 0003). Empty keeps the importer OFF -- exactly the model's "unset =
-  # off"; set it only while stage A runs.
-  dockLegacyImportConsumerGroup: ""
 
 # MANDATORY: the service runs on real Postgres only and exits at boot without
 # DATABASE_URL. The chart refuses to render unless database.url or
