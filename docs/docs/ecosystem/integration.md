@@ -23,7 +23,6 @@ Neighbour patterns follow the yard context map: the yard and facility feeds are 
 | | | `...trailer.TrailerUndocked` | Completes the appointment (an implicit arrival if it was still `BOOKED`). | |
 | `facility-layout` | `warehouse.facility.events` | `com.warehouse.wms.facility-layout.zone.ZoneRegistered`, `...locationslot.LocationSlotRegistered`, `...locationslot.LocationSlotDecommissioned` | Maintains the `zones` and `doors` copies: a door's site (through its zone), dock flow and active flag. | Conformist |
 | `inbound-receiving` | `warehouse.inbound-receiving.events` | `com.warehouse.wms.inbound-receiving.asn.ASNRegistered`, `...asn.ASNCancelled` | Maintains the `asns` copy; an ASN cancellation cancels an INBOUND `BOOKED` appointment whose ASNs are now all cancelled (reason `ASN_CANCELLED`). | Conformist |
-| `inbound-receiving` (legacy, optional) | same topic | `com.warehouse.wms.inbound-receiving.dockappointment.DockAppointmentBooked`, `...CheckedIn`, `...Cancelled`, `...Completed` | Strangler stage A importer: imports the legacy appointments once (provenance `legacy-import`). Off unless `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` is set. | Conformist |
 | `process-path-management` | `warehouse.process-path-management.events` | `com.warehouse.wes.process-path-management.cptschedule.CPTScheduleChanged` | Replaces the site's cutoff copy (the whole schedule): outbound bookings validate `cptId` against it. | Conformist |
 
 Behaviour common to every consumer (`internal/adapters/inbound/kafka/kafka.go`, `consumer.go`):
@@ -86,6 +85,6 @@ The consumers' side of these rows (the event types a neighbour reads) comes from
 - **No ETA feed.** `transport-visibility` does not exist; ETAs enter through `POST .../eta-reports` and the `report_eta` MCP tool.
 - **No automatic pickup booking from the CPT schedule** (`PickupFromCutoffs` is phase 2): the cutoff copy is stored and used only to validate `cptId`.
 - **No retail-network edge.** No `retailnetwork.*` topic is consumed and no retail-network service is called.
-- **Strangler stages beyond A.** Only the stage A importer exists in this repository; the later stages are in the neighbours.
+- **No legacy appointment feed.** The stage A importer of the ADR 0019 strangler was removed (ADR 0011): this context consumes no inbound-receiving `dockappointment.*` type, only the two ASN events.
 
 Where the Helm chart or OpenAPI mention a "kind" cluster (`servers` in `apis/openapi.yaml`, the image comment in `values.yaml`) they predate the move to k3s; the contract itself is unaffected.

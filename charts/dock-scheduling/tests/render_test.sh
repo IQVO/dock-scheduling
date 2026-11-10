@@ -17,12 +17,11 @@ base=(--set database.url=postgres://u@example.invalid:5432/db
   --set config.facilityConsumerGroup=dock-scheduling-facility
   --set config.asnConsumerGroup=dock-scheduling-asn
   --set config.cptConsumerGroup=dock-scheduling-cpt)
-legacy=(--set config.dockLegacyImportConsumerGroup=dock-scheduling-legacy-import)
 relay=(--set relay.enabled=true)
 analytics=(--set analytics.enabled=true
   --set analytics.database.projectorUrl=postgres://projector@example.invalid:5432/a
   --set analytics.database.reportsUrl=postgres://reports@example.invalid:5432/a)
-everything=("${base[@]}" "${legacy[@]}" "${relay[@]}" "${analytics[@]}"
+everything=("${base[@]}" "${relay[@]}" "${analytics[@]}"
   --set mcp.enabled=true --set gatewayApi.enabled=true --set ingress.enabled=true
   --set autoscaling.api.enabled=true --set kongPlugins.cors.enabled=true
   --set kongPlugins.prometheus.enabled=true --set kongPlugins.opentelemetry.enabled=true
@@ -76,14 +75,6 @@ if grep -q 'OUTBOX_RELAY_INTERVAL:' <<<"$plain"; then fail "an empty config.outb
 if grep -q 'OUTBOX_BATCH_SIZE:' <<<"$plain"; then fail "an empty config.outboxBatchSize must not render"; fi
 if grep -q 'SHUTDOWN_DRAIN_DELAY:' <<<"$plain"; then fail "an empty config.shutdownDrainDelay must not render"; fi
 
-# The strangler stage A importer is OFF by default and on when its group is set.
-if grep -q 'DOCK_LEGACY_IMPORT_CONSUMER_GROUP' <<<"$api_deployment"; then
-  fail "DOCK_LEGACY_IMPORT_CONSUMER_GROUP must not render when unset (unset = importer off)"
-fi
-legacy_dep="$(render "${base[@]}" "${legacy[@]}" --show-only templates/deployment.yaml)"
-[[ "$(env_value "$legacy_dep" DOCK_LEGACY_IMPORT_CONSUMER_GROUP)" == "dock-scheduling-legacy-import" ]] \
-  || fail "config.dockLegacyImportConsumerGroup is not rendered when set"
-
 # No env var is ever set twice on one container (env wins over envFrom, but a
 # duplicated `env` entry is a silently last-one-wins bug).
 render_all="$(render "${everything[@]}")"
@@ -136,7 +127,7 @@ if grep -q 'name: DATABASE_URL$' <<<"$reports"; then fail "cmd/reports never ope
 # own Deployment for the long-running ones, the CronJob for sweep's).
 for var in HTTP_ADDR LOG_LEVEL DATABASE_URL MIGRATIONS_DATABASE_URL KAFKA_BROKERS \
   YARD_CONSUMER_GROUP FACILITY_CONSUMER_GROUP ASN_CONSUMER_GROUP CPT_CONSUMER_GROUP \
-  DOCK_LEGACY_IMPORT_CONSUMER_GROUP OUTBOX_RELAY_INTERVAL OUTBOX_BATCH_SIZE OUTBOX_MAX_ATTEMPTS \
+  OUTBOX_RELAY_INTERVAL OUTBOX_BATCH_SIZE OUTBOX_MAX_ATTEMPTS \
   SHUTDOWN_DRAIN_DELAY MCP_ADDR ADMIN_ADDR ANALYTICS_DATABASE_URL ANALYTICS_CONSUMER_GROUP \
   ENVIRONMENT SERVICE_VERSION OTEL_EXPORTER_OTLP_ENDPOINT \
   SWEEP_URL SWEEP_REQUEST_TIMEOUT SWEEP_MAX_ATTEMPTS SWEEP_RETRY_BACKOFF SWEEP_MAX_BACKOFF SIDECAR_QUIT_URL; do

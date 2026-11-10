@@ -48,7 +48,7 @@ terms the design model uses but does not list in `ul`.
 | **MaxWindow** | The longest window, 4 hours (`ErrInvalidWindow`); a site may lower it, never raise it. | `dockappointment.HardMaxWindow`, `dockappointment.Rules` |
 | **Cancellation reason** | `CARRIER_REQUEST`, `SITE_REQUEST`, `ASN_CANCELLED`, `TURNED_AWAY`. | `dockappointment.Reason` |
 | **At-risk cause** | `LATE_ETA` or `DOOR_REASSIGNED_OVERLAP`. | `dockappointment.AtRiskCause` |
-| **Provenance** | Where an appointment came from; the design model names `legacy-import`. | `dockappointment.Provenance` (`native` or `legacy-import`) |
+| **Provenance** | Where an appointment came from; the design model names `legacy-import`, which is historical: nothing sets it since the legacy importer was removed (ADR 0011). | `dockappointment.Provenance` (`native` or `legacy-import`) |
 
 ## Neighbour terms used here
 

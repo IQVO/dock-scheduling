@@ -77,38 +77,6 @@ func Book(p BookParams) (*DockAppointment, []Event, error) {
 	return a, []Event{a.bookedEvent(p.Rules, p.Now)}, nil
 }
 
-// LegacyParams are the inputs of ImportLegacy.
-type LegacyParams struct {
-	ID          string
-	SiteID      string
-	DoorCode    string
-	Carrier     string
-	WindowStart time.Time
-	WindowEnd   time.Time
-	ASNNumbers  []string
-	Rules       Rules
-	Now         time.Time
-}
-
-// ImportLegacy builds an INBOUND appointment from a legacy inbound-receiving
-// booking (strangler stage A, D-2). It enforces none of window-in-past, hours,
-// closures, overlap or known-ASN, and the carrier has no SCAC.
-func ImportLegacy(p LegacyParams) (*DockAppointment, []Event, error) {
-	a, err := buildParts(p.ID, p.SiteID, p.DoorCode, string(shared.Inbound), p.Carrier, "")
-	if err != nil {
-		return nil, nil, err
-	}
-	if a.window, err = newBareWindow(p.WindowStart, p.WindowEnd); err != nil {
-		return nil, nil, err
-	}
-	if a.asns, err = cleanAsns(p.ASNNumbers); err != nil {
-		return nil, nil, err
-	}
-	a.provenance = LegacyImport
-	a.createdAt, a.updatedAt = p.Now.UTC(), p.Now.UTC()
-	return a, []Event{a.bookedEvent(p.Rules, p.Now)}, nil
-}
-
 func build(p BookParams) (*DockAppointment, error) {
 	a, err := buildParts(p.ID, p.SiteID, p.DoorCode, p.Direction, p.Carrier, p.CarrierSCAC)
 	if err != nil {

@@ -11,7 +11,6 @@ config:
   facilityConsumerGroup: "dock-scheduling-facility"
   asnConsumerGroup: "dock-scheduling-asn"
   cptConsumerGroup: "dock-scheduling-cpt"
-  dockLegacyImportConsumerGroup: "dock-scheduling-legacy-import"
 kafka:
   enabled: true
   brokers: "kafka.warehouse-systems.svc.cluster.local:9092"

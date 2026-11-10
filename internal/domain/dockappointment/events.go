@@ -38,7 +38,7 @@ func (h Header) OccurredAt() time.Time { return h.At }
 // SiteID returns the site of the appointment's door.
 func (h Header) SiteID() string { return h.Site }
 
-// BookedEvent is raised by Book and ImportLegacy.
+// BookedEvent is raised by Book.
 type BookedEvent struct {
 	Header
 	Direction        shared.Direction

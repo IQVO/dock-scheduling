@@ -104,16 +104,14 @@ fields).
 | `com.warehouse.wms.inbound-receiving.asn.ASNRegistered` | `warehouse.inbound-receiving.events` | inbound-receiving |
 | `com.warehouse.wms.inbound-receiving.asn.ASNCancelled` | `warehouse.inbound-receiving.events` | inbound-receiving |
 | `com.warehouse.wes.process-path-management.cptschedule.CPTScheduleChanged` | `warehouse.process-path-management.events` | process-path-management |
-| `com.warehouse.wms.inbound-receiving.dockappointment.DockAppointment*` (Booked/CheckedIn/Cancelled/Completed) | `warehouse.inbound-receiving.events` | inbound-receiving (legacy importer, strangler stage A) |
 
 ## Consumer group id
 
 Every consumer's group id comes from the environment, never a hardcoded
 string literal — `internal/architecture/fitness_test.go`'s
-TestKafkaConsumerGroupNeverHardcodedInline enforces this. The five variables
-(`YARD_CONSUMER_GROUP`, `FACILITY_CONSUMER_GROUP`, `ASN_CONSUMER_GROUP`,
-`CPT_CONSUMER_GROUP` and the optional strangler-stage-A
-`DOCK_LEGACY_IMPORT_CONSUMER_GROUP`) are read by
+TestKafkaConsumerGroupNeverHardcodedInline enforces this. The four variables
+(`YARD_CONSUMER_GROUP`, `FACILITY_CONSUMER_GROUP`, `ASN_CONSUMER_GROUP`
+and `CPT_CONSUMER_GROUP`) are read by
 `internal/adapters/inbound/kafka/groups.go` from `cmd/api`'s boot; the
 projector's group is `ANALYTICS_CONSUMER_GROUP` (`cmd/projector`). No
 consumer replays from FirstOffset into an in-memory read model: the local

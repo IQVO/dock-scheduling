@@ -156,29 +156,6 @@ func runEndedAndLock(t *testing.T, f Factory) {
 	}
 }
 
-// runLegacyBackstops: a legacy import enforces neither the door overlap nor the
-// ASN uniqueness (D-2), so the storage backstops must not refuse it.
-func runLegacyBackstops(t *testing.T, f Factory) {
-	e := f(t)
-	mustSave(t, e, book(t, 1, "D1", 0, "ASN-A"), 0)
-	imp, _, err := dockappointment.ImportLegacy(dockappointment.LegacyParams{
-		ID: apptID(2), SiteID: "WH1", DoorCode: "D1", Carrier: "ACME", WindowStart: base, WindowEnd: base.Add(time.Hour),
-		ASNNumbers: []string{"ASN-A"}, Now: base,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mustSave(t, e, imp, 0)
-	got, err := e.Appointments.Get(context.Background(), apptID(2))
-	if err != nil || got.Snapshot().Provenance != dockappointment.LegacyImport {
-		t.Fatalf("legacy import = %+v, %v", got, err)
-	}
-	// a native booking is still refused against the native one
-	if err := e.Appointments.Save(context.Background(), book(t, 3, "D1", 0, "ASN-Z"), 0); !errors.Is(err, dockappointment.ErrDoorDoubleBooked) {
-		t.Fatalf("native overlap: %v", err)
-	}
-}
-
 // runDoorOverride: an appointment whose door was set by a physical fact is exempt from the overlap backstop.
 func runDoorOverride(t *testing.T, f Factory) {
 	ctx := context.Background()

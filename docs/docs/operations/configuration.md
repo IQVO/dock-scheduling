@@ -24,7 +24,6 @@ Duration variables (`OUTBOX_RELAY_INTERVAL`, `SHUTDOWN_DRAIN_DELAY`) accept a Go
 | `FACILITY_CONSUMER_GROUP` | none | yes | Consumer group of the facility-layout consumer (`warehouse.facility.events`). |
 | `ASN_CONSUMER_GROUP` | none | yes | Consumer group of the inbound-receiving ASN consumer (`warehouse.inbound-receiving.events`). |
 | `CPT_CONSUMER_GROUP` | none | yes | Consumer group of the process-path-management cutoff consumer (`warehouse.process-path-management.events`). |
-| `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` | unset = importer off | no | Group of the optional strangler "stage A" legacy appointment importer. Set it only while the import runs. |
 | `HTTP_ADDR` | `:8080` | no | Listen address of the REST API. |
 | `OUTBOX_RELAY_INTERVAL` | `1s` | no | Poll interval of the in-process outbox relay. |
 | `OUTBOX_BATCH_SIZE` | `100` | no | Outbox rows claimed per relay pass. |

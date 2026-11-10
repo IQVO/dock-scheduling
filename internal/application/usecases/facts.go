@@ -19,7 +19,6 @@ const (
 	IgnoredWrongSite          = "site_mismatch"
 	IgnoredUnknownDoor        = "unknown_door"
 	IgnoredAlreadyApplied     = "already_applied"
-	IgnoredNotLegacy          = "not_legacy_import"
 )
 
 // consume runs fn in one unit of work together with the claim of the
@@ -216,5 +215,3 @@ func (s *Service) rulesOfSite(ctx context.Context, site shared.SiteID) (dockappo
 	}
 	return rulesOf(cal.Settings()), nil
 }
-
-func isNotFound(err error) bool { return errors.Is(err, ports.ErrNotFound) }

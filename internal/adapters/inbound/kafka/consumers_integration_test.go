@@ -256,7 +256,6 @@ func TestAsnConsumer_RealKafkaAndPostgres(t *testing.T) {
 		fixture(t, "inbound_ASNCancelled"),
 		poison,
 		withID(t, "inbound_ASNRegistered", eventIDFor(7)),
-		fixture(t, "inbound_DockAppointmentBooked"), // legacy type: not this consumer's
 	)
 	group := w.group("asn")
 	c, err := NewAsnConsumerForTopic(w.tr, topic, group, w.svc)
@@ -264,7 +263,7 @@ func TestAsnConsumer_RealKafkaAndPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.run(c)
-	w.committedPast(group, topic, 5)
+	w.committedPast(group, topic, 4)
 
 	s := w.appt(fixtureAppointment)
 	if s.State != "CANCELLED" || s.Reason != "ASN_CANCELLED" || s.Version != 2 {
@@ -312,87 +311,7 @@ func TestCutoffConsumer_RealKafkaAndPostgres(t *testing.T) {
 	assertDeadLetter(t, dlq, topic, eventIDFor(9))
 }
 
-// TestLegacyImporter_On: the strangler stage A importer on a real broker: one
-// import per appointment id, the later legacy events applied, a poison Booked
-// dead-lettered.
-func TestLegacyImporter_On(t *testing.T) {
-	w := newITWorld(t)
-	w.seedFacility()
-	if err := w.svc.ConsumeSlotRegistered(w.ctx, "seed-legacy-door", legacyDoor, "zone-dock-wh1", "Dock", "Both"); err != nil {
-		t.Fatal(err)
-	}
-	topic, dlq := w.topics(InboundReceivingTopic)
-	poison := withData(t, "inbound_DockAppointmentBooked", eventIDFor(10), map[string]any{"door_code": "bad door"})
-	w.produce(topic,
-		fixture(t, "inbound_DockAppointmentBooked"),
-		withID(t, "inbound_DockAppointmentBooked", eventIDFor(11)), // the same appointment again
-		fixture(t, "inbound_DockAppointmentCheckedIn"),
-		poison,
-		fixture(t, "inbound_ASNRegistered"), // not a legacy type
-		fixture(t, "inbound_DockAppointmentCompleted"),
-	)
-	group := w.group("legacy")
-	c, err := NewLegacyImportConsumerForTopic(w.tr, topic, group, w.svc)
-	if err != nil || c == nil {
-		t.Fatalf("legacy consumer = %v err=%v", c, err)
-	}
-	w.run(c)
-	w.committedPast(group, topic, 6)
-
-	if n := w.count("dock_appointments"); n != 1 {
-		t.Fatalf("appointments = %d, want one import for one legacy appointment id", n)
-	}
-	if s := w.appt(legacyAppointment); s.State != "COMPLETED" || s.Provenance != "legacy-import" {
-		t.Fatalf("appointment = %+v, want the legacy import COMPLETED", s)
-	}
-	assertDeadLetter(t, dlq, topic, eventIDFor(10))
-}
-
-// TestLegacyImporter_OffWhenItsGroupIsUnset: with DOCK_LEGACY_IMPORT_CONSUMER_GROUP
-// unset no importer exists, so the legacy events on the shared topic import
-// nothing; the ASN consumer under its own group reads past them.
-func TestLegacyImporter_OffWhenItsGroupIsUnset(t *testing.T) {
-	w := newITWorld(t)
-	w.seedFacility()
-	if err := w.svc.ConsumeSlotRegistered(w.ctx, "seed-legacy-door", legacyDoor, "zone-dock-wh1", "Dock", "Both"); err != nil {
-		t.Fatal(err)
-	}
-	topic, dlq := w.topics(InboundReceivingTopic)
-	w.produce(topic,
-		fixture(t, "inbound_DockAppointmentBooked"),
-		fixture(t, "inbound_DockAppointmentCheckedIn"),
-		fixture(t, "inbound_DockAppointmentCancelled"),
-		fixture(t, "inbound_DockAppointmentCompleted"),
-	)
-	if off, err := NewLegacyImportConsumerForTopic(w.tr, topic, "", w.svc); off != nil || err != nil {
-		t.Fatalf("legacy consumer with an unset group = %v err=%v, want none", off, err)
-	}
-	groups, err := GroupsFromEnv(func(k string) string {
-		if k == EnvLegacyImportGroup {
-			return ""
-		}
-		return "g"
-	})
-	if err != nil || groups.LegacyImport != "" {
-		t.Fatalf("groups = %+v err=%v", groups, err)
-	}
-	asnGroup := w.group("asn")
-	asn, err := NewAsnConsumerForTopic(w.tr, topic, asnGroup, w.svc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w.run(asn)
-	w.committedPast(asnGroup, topic, 4)
-
-	if n := w.count("dock_appointments"); n != 0 {
-		t.Fatalf("appointments = %d, want none: the importer is off", n)
-	}
-	if kafkatest.EndOffset(t, dlq) != 0 {
-		t.Fatal("a legacy event of another consumer's topic was dead-lettered")
-	}
-}
-
-// TestAllConsumersTogether_StartAndStop: the five consumers started as one set
+// TestAllConsumersTogether_StartAndStop: the four consumers started as one set
 // by Start, each on its own topic, reproduce the end-to-end chain (facility
 // door, ASN, booking, gate, docking, release) and stop cleanly.
 func TestAllConsumersTogether_StartAndStop(t *testing.T) {
@@ -401,7 +320,6 @@ func TestAllConsumersTogether_StartAndStop(t *testing.T) {
 	asnTopic, _ := w.topics(InboundReceivingTopic)
 	cptTopic, _ := w.topics(ProcessPathTopic)
 	yardTopic, _ := w.topics(YardTopic)
-	legacyTopic, _ := w.topics(InboundReceivingTopic)
 
 	build := func(c *Consumer, err error) *Consumer {
 		t.Helper()
@@ -415,23 +333,20 @@ func TestAllConsumersTogether_StartAndStop(t *testing.T) {
 		build(NewAsnConsumerForTopic(w.tr, asnTopic, w.group("a"), w.svc)),
 		build(NewCutoffConsumerForTopic(w.tr, cptTopic, w.group("c"), w.svc)),
 		build(NewYardConsumerForTopic(w.tr, yardTopic, w.group("y"), w.svc)),
-		build(NewLegacyImportConsumerForTopic(w.tr, legacyTopic, w.group("l"), w.svc)),
 	}
 	running := Start(w.ctx, set...)
 
-	w.produce(facilityTopic, fixture(t, "facility_ZoneRegistered"), fixture(t, "facility_LocationSlotRegistered"),
-		withData(t, "facility_LocationSlotRegistered", eventIDFor(20), map[string]any{"locationCode": legacyDoor}))
+	w.produce(facilityTopic, fixture(t, "facility_ZoneRegistered"), fixture(t, "facility_LocationSlotRegistered"))
 	w.produce(asnTopic, fixture(t, "inbound_ASNRegistered"))
 	w.produce(cptTopic, fixture(t, "ppm_CPTScheduleChanged"))
 	w.eventually("the door, the ASN and the cutoff copies", func() bool {
-		return w.count("doors") == 2 && w.count("asns") == 1 && w.count("cutoffs") == 1
+		return w.count("doors") == 1 && w.count("asns") == 1 && w.count("cutoffs") == 1
 	})
 	w.book(fixtureAppointment, fixtureDoor, fixtureASN)
 
-	w.produce(legacyTopic, fixture(t, "inbound_DockAppointmentBooked"))
 	w.produce(yardTopic, fixture(t, "yard_VisitCheckedIn"), fixture(t, "yard_TrailerDocked"), fixture(t, "yard_TrailerUndocked"))
-	w.eventually("both appointments to complete or import", func() bool {
-		return w.appt(fixtureAppointment).State == "COMPLETED" && w.count("dock_appointments") == 2
+	w.eventually("the appointment to complete", func() bool {
+		return w.appt(fixtureAppointment).State == "COMPLETED"
 	})
 	if err := running.Stop(); err != nil {
 		t.Fatalf("Stop = %v, want a clean shutdown", err)

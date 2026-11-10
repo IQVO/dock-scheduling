@@ -17,9 +17,6 @@ data:
   FACILITY_CONSUMER_GROUP: {{ .Values.config.facilityConsumerGroup | quote }}
   ASN_CONSUMER_GROUP: {{ .Values.config.asnConsumerGroup | quote }}
   CPT_CONSUMER_GROUP: {{ .Values.config.cptConsumerGroup | quote }}
-  {{- with .Values.config.dockLegacyImportConsumerGroup }}
-  DOCK_LEGACY_IMPORT_CONSUMER_GROUP: {{ . | quote }}
-  {{- end }}
   OUTBOX_MAX_ATTEMPTS: {{ .Values.config.outboxMaxAttempts | quote }}
   {{- with .Values.config.outboxRelayInterval }}
   OUTBOX_RELAY_INTERVAL: {{ . | quote }}

@@ -21,7 +21,7 @@ There is **no OpenTelemetry metrics or trace SDK** in the code (`go.mod` has the
 |---|---|---|---|---|
 | `dock_scheduling_http_requests_total` | counter | requests | `method`, `route`, `status` | Finished HTTP requests. `route` is the chi route pattern (for example `/appointments/{appointmentId}`) and `unmatched` for no match, never the raw path, so cardinality stays bounded. |
 | `dock_scheduling_http_request_duration_seconds` | histogram (default Prometheus buckets) | seconds | `method`, `route` | Request duration. |
-| `dock_scheduling_ignored_facts_total` | counter | facts | `reason` | Yard, ASN or legacy facts the policies deliberately changed nothing for. `reason` is one of `unknown_appointment`, `terminal_appointment`, `site_mismatch`, `unknown_door`, `already_applied`, `not_legacy_import`. |
+| `dock_scheduling_ignored_facts_total` | counter | facts | `reason` | Yard or ASN facts the policies deliberately changed nothing for. `reason` is one of `unknown_appointment`, `terminal_appointment`, `site_mismatch`, `unknown_door`, `already_applied` (`not_legacy_import` was removed with the legacy importer, ADR 0011). |
 | `dock_scheduling_implicit_arrivals_total` | counter | arrivals | none | Door releases applied to a `BOOKED` appointment (arrival implied, no `TrailerDocked` or `VisitCheckedIn` seen first). |
 | `go_*`, `process_*` | Go runtime and process collectors | | | Standard client_golang collectors. |
 
