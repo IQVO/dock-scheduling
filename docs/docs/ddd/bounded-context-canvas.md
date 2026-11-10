@@ -56,7 +56,7 @@ flowchart LR
     in3 -->|"cmd - REST<br/>MarkNoShow"| BC
     in4 ==>|"evt - Kafka<br/>VisitCheckedIn,<br/>VisitRejected,<br/>TrailerDocked,<br/>TrailerUndocked"| BC
     in5 ==>|"evt - Kafka<br/>LocationSlotRegistered,<br/>LocationSlotDecommissioned,<br/>ZoneRegistered"| BC
-    in6 ==>|"evt - Kafka<br/>ASNRegistered,<br/>ASNCancelled,<br/>legacy DockAppointment<br/>events, stage A to D"| BC
+    in6 ==>|"evt - Kafka<br/>ASNRegistered,<br/>ASNCancelled"| BC
     in7 ==>|"evt - Kafka<br/>CPTScheduleChanged"| BC
     linkStyle 0 stroke:#1971c2,stroke-width:1.5px
     linkStyle 1 stroke:#1971c2,stroke-width:1.5px
@@ -178,7 +178,6 @@ full type string (`process-path-management` is in the `wes` tier:
 | `inbound-receiving` | `ASNRegistered` | Event | Kafka `warehouse.inbound-receiving.events` | Conformist |
 | `inbound-receiving` | `ASNCancelled` | Event | Kafka `warehouse.inbound-receiving.events` | Conformist |
 | `process-path-management` | `CPTScheduleChanged` | Event | Kafka `warehouse.process-path-management.events` | Conformist |
-| `inbound-receiving` (strangler stage A to D) | `DockAppointmentBooked`, `DockAppointmentCheckedIn`, `DockAppointmentCancelled`, `DockAppointmentCompleted` | Event | Kafka `warehouse.inbound-receiving.events` (policy `LegacyImport`; removed at stage E) | Conformist, transitional (this page's reading; off unless `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` is set) |
 
 Reports: `GET /reports/schedule-adherence` and `GET /reports/freshness` are served by
 the separate `reports` binary from `apis/openapi-reports.yaml` (read-only, on the analytics
@@ -277,7 +276,7 @@ tolerance travels on `Booked` and `Rescheduled` (`DS-G01`); `VisitRejected` canc
 `TURNED_AWAY` (`DS-G02`); one appointment covers one trailer (`DS-G03`); `PickupFromCutoffs`
 is phase 2 and only the schedule is stored (`DS-G04`, `DS-G05`); a reschedule may change the
 door (`DS-G06`); the calendar is created lazily and open 24x7 until hours are declared
-(`DS-G07`); the legacy import enforces nothing (`DS-G08`); the planner may cancel and
+(`DS-G07`); the legacy import (removed in ADR 0011) enforced nothing (`DS-G08`); the planner may cancel and
 reschedule (`DS-G10`); the aggregate exposes `atRisk` (`DS-G11`); a decommissioned door blocks
 new bookings only and new hours that strand an appointment are refused (`DS-G12`, `DS-G13`);
 door codes are globally unique (`DS-G15`); `NO_SHOW` is terminal, a late carrier books anew

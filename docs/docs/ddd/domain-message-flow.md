@@ -122,7 +122,7 @@ sequenceDiagram
     Note over EM: opens a problem case
 ```
 
-Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`, `internal/adapters/inbound/kafka/legacy_import_consumer.go`.
+Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`.
 
 Omitted: the sweep is idempotent, so a second run marks nothing new. The
 routing of the case inside `exception-management` is that context's and is
@@ -159,8 +159,8 @@ Source: `internal/domain/dockcalendar/calendar.go`, `internal/domain/dockcalenda
 
 Omitted: `DoorOperatingHoursDeclared` (analytics only) and
 `DeclareOperatingHours`, which is refused with `ErrHoursConflictWithAppointments` when it would
-leave an active appointment outside the hours (decision D-8); the strangler import and the phase-2 pickup appointments
-(`LegacyImport`, `PickupFromCutoffs`), which are described on
+leave an active appointment outside the hours (decision D-8); the phase-2 pickup policy
+(`PickupFromCutoffs`), which is described on
 [Domain Events](/docs/ddd/domain-events). The refusal that
 lists the appointment ids is the design model's only help for a planner closing a
 door; `ListAppointments` takes filters (for example `atRisk`), which are in the OpenAPI contract.

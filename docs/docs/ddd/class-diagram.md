@@ -15,8 +15,8 @@ the yard design model; method names are the design model's commands. Fields are 
 
 In the code: the package names are the design model's. The Go methods of the root are shorter than
 the command names drawn here (`Reschedule`, `Cancel`, `ReportEta`, `MarkAtRisk`,
-`RecordArrival`, `ReassignDoor`, `RecordDoorRelease`, `MarkNoShow`), booking and legacy import are
-constructors, the state type is `State`, the per-site `Rules` value (max window, granularity,
+`RecordArrival`, `ReassignDoor`, `RecordDoorRelease`, `MarkNoShow`), booking is a
+constructor, the state type is `State`, the per-site `Rules` value (max window, granularity,
 arrival tolerance, no-show grace) is passed to the methods that need it, and the repository is
 `AppointmentRepo` (diagram 1c). The ports and adapters are in the code in diagram 5; the drawn
 fields and methods are not a copy of the code.
@@ -45,7 +45,6 @@ classDiagram
         -provenance string
         -version int
         +BookAppointment(cmd)$ DockAppointment
-        +ImportLegacyAppointment(legacy)$ DockAppointment
         +RescheduleAppointment(window, now) error
         +CancelAppointment(reason) error
         +ReportEta(eta, tolerance) error
@@ -164,8 +163,7 @@ avoid the diagram keyword `end`. `BookAppointment(cmd)` stands for the
 booking inputs (door, direction, window, carrier, references, expected
 seal). The advisory that `ReportEta` may raise (`DockAppointmentAtRisk`) is
 an event, not a return value. The commands that policies drive
-(`RecordArrival`, `ReassignDoor`, `RecordDoorRelease`,
-`ImportLegacyAppointment`) have no REST route. `ListActiveOnDoor` and
+(`RecordArrival`, `ReassignDoor`, `RecordDoorRelease`) have no REST route. `ListActiveOnDoor` and
 `ListBookedEndedBy` are repository queries the rules need (the overlap check and
 the no-show sweep); `LockDoor` takes the per-door advisory lock for the rest of the unit of work, and
 `Save` is guarded by the version the caller loaded. `DoorSchedule` is the domain service named by
@@ -331,13 +329,8 @@ classDiagram
         <<Policy>>
         +OnAsnCancelled()
     }
-    class LegacyImport {
-        <<Policy>>
-        +OnLegacyAppointment()
-    }
     NoShowSweep ..> DockAppointmentNoShow : MarkNoShow
     CancelWhenAllAsnsCancelled ..> DockAppointmentCancelled : CancelAppointment
-    LegacyImport ..> DockAppointmentBooked : ImportLegacyAppointment
 ```
 
 Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`.
@@ -349,8 +342,8 @@ Omitted: the CloudEvents envelope (see
 `RecordArrival` rather than a source of events. `BookAppointment`,
 `RescheduleAppointment` and `CancelAppointment` by a carrier raise
 `DockAppointmentBooked`, `Rescheduled` and `Cancelled` directly, not through
-a policy; `DockAppointmentRescheduled` has no policy at all. `LegacyImport`
-raising `DockAppointmentBooked` is in the code (service ADR 0002, assumption A12).
+a policy; `DockAppointmentRescheduled` has no policy at all. The `LegacyImport` policy that once raised
+`DockAppointmentBooked` was removed (ADR 0011).
 
 ## 4. Read models and the checks that use them
 
@@ -434,7 +427,6 @@ flowchart LR
         UC1["Appointment<br/>Book, Reschedule,<br/>Cancel, ReportEta,<br/>MarkNoShow"]
         UC2["Yard facts<br/>RecordArrival,<br/>ReassignDoor,<br/>RecordDoorRelease"]
         UC3["Calendar<br/>hours, settings,<br/>closures"]
-        UC4["ImportLegacy-<br/>Appointment"]
         PRJ["projectors<br/>DoorView, AsnView,<br/>CutoffView,<br/>AdherenceReport"]
     end
     subgraph DOM["internal/domain"]
@@ -446,12 +438,10 @@ flowchart LR
     HTTP --> UC3
     KAF --> UC1
     KAF --> UC2
-    KAF --> UC4
     KAF --> PRJ
     UC1 --> D1
     UC2 --> D1
     UC3 --> D2
-    UC4 --> D1
     D1 --> D3
 ```
 
@@ -496,7 +486,7 @@ lock is `AppointmentRepo.LockDoor`, and the read-model ports (`DoorView`, `AsnVi
 `http` adapter drives the carrier and planner commands and the sweep, which
 a Kubernetes CronJob calls over REST, so there is no `scheduler` adapter.
 The `kafka` adapter drives the policies (`ArrivalFromGate`, `ActualDoorWins`,
-`CompleteOnDoorRelease`, `CancelWhenAllAsnsCancelled`, `LegacyImport`) and the
+`CompleteOnDoorRelease`, `CancelWhenAllAsnsCancelled`) and the
 projectors; the `AdherenceReport` projector reads this context's own
 analytics topic.
 

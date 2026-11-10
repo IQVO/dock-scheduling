@@ -15,14 +15,14 @@ Source: `internal/`, `cmd/`, `migrations/`, `analytics/migrations/`, `charts/doc
 
 | Layer | Path | Role |
 | --- | --- | --- |
-| Domain | `internal/domain/dockappointment` | `DockAppointment` aggregate: states, `Window`, `Eta`, `Arrival`, commands (`Book`, `Reschedule`, `Cancel`, `ReportEta`, arrival, door reassignment, release, no-show, legacy import), `DoorSchedule` overlap check and the domain events. |
+| Domain | `internal/domain/dockappointment` | `DockAppointment` aggregate: states, `Window`, `Eta`, `Arrival`, commands (`Book`, `Reschedule`, `Cancel`, `ReportEta`, arrival, door reassignment, release, no-show), `DoorSchedule` overlap check and the domain events. |
 | Domain | `internal/domain/dockcalendar` | `DockCalendar` aggregate (one per site): `Settings`, operating hours, closures, free/busy availability, the calendar events. |
 | Domain | `internal/domain/shared` | Value objects: `DoorCode`, `SiteID`, `Carrier` (name and SCAC), `Direction`, `DockFlow`. |
 | Application | `internal/application/usecases` | The `Service`: commands (`book.go`, `change.go`, `calendar.go`), queries (`queries.go`), the Kafka-driven fact use cases (`facts.go`, `yard.go`), the idempotent write wrapper and the `Initiator` attribution (`initiator.go`). |
 | Application | `internal/application/ports` | Out ports: `AppointmentRepo`, `CalendarRepo`, `DoorView`, `AsnView`, `CutoffView`, `ProcessedEvents`, `IdempotencyStore`, `EventPublisher`, `Metrics`, `IDGen`, `Clock`, `UnitOfWork`, `AdherenceReader`, `FreshnessReader`. |
 | Application | `internal/application/views`, `repository`, `outbox` | Read models returned to adapters, filters and paging records, and the already-encoded outbox `Row`/fact types. |
 | Inbound adapter | `internal/adapters/inbound/http` | chi router for `apis/openapi.yaml`: handlers, RFC 7807 problems (`errors.go`), `Idempotency-Key` middleware, ETag/`If-Match`, `/healthz`, `/readyz`, `/metrics`; plus the reports router for `apis/openapi-reports.yaml`. No auth middleware. |
-| Inbound adapter | `internal/adapters/inbound/kafka` | The yard, facility, ASN, CPT and legacy-import consumers and the analytics consumer: CloudEvents decode, dispatch on the full `type`, retry with backoff, dead-letter topic. Decode only; every effect is a use case. |
+| Inbound adapter | `internal/adapters/inbound/kafka` | The yard, facility, ASN and CPT consumers and the analytics consumer: CloudEvents decode, dispatch on the full `type`, retry with backoff, dead-letter topic. Decode only; every effect is a use case. |
 | Inbound adapter | `internal/adapters/inbound/mcp` | MCP server (Streamable HTTP): five read tools, four write tools, one resource and prompts, authority levels. |
 | Outbound adapter | `internal/adapters/outbound/postgres` | pgx repositories, unit of work (`pgtx`), outbox publisher and store, idempotency store, embedded migrations. |
 | Outbound adapter | `internal/adapters/outbound/analyticsstore` | The analytical database: writer `Projection`, read-only `Reader`, its own migrations. |
@@ -41,7 +41,7 @@ All six binaries are built into one image (`Dockerfile` loops over `cmd/*`).
 
 | Binary | Role | Port | Probes |
 | --- | --- | --- | --- |
-| `cmd/api` | REST API, in-process outbox relay and the four Kafka consumers (plus the optional legacy importer), all always on, on real Postgres and Kafka. | `HTTP_ADDR`, default `:8080` | `GET /healthz`, `GET /readyz` (Postgres ping and a Kafka metadata request), `GET /metrics` |
+| `cmd/api` | REST API, in-process outbox relay and the four Kafka consumers, all always on, on real Postgres and Kafka. | `HTTP_ADDR`, default `:8080` | `GET /healthz`, `GET /readyz` (Postgres ping and a Kafka metadata request), `GET /metrics` |
 | `cmd/mcp` | MCP server, Streamable HTTP, over the same use cases; no relay, no consumer. Serves `/mcp` and `/`. | `MCP_ADDR`, default `:8090` | `GET /healthz`, `GET /readyz`, `GET /metrics` |
 | `cmd/projector` | The only writer of the analytical database: consumes `warehouse.dock-scheduling.analytics`; exits non-zero if its consumer stops. | `ADMIN_ADDR`, default `:8091` | `GET /healthz`, `GET /readyz` |
 | `cmd/reports` | Read-only HTTP reader of the analytical database: `/reports/schedule-adherence`, `/reports/freshness`. | `HTTP_ADDR`, default `:8092` | `GET /healthz`, `GET /readyz`, `GET /metrics` |

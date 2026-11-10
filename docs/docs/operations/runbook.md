@@ -19,7 +19,7 @@ Registered by `warehouse-infra` PR 193 (commit `b4b827e`, "register dock-schedul
 |---|---|
 | `terraform/apps.yaml` | Entry `dock-scheduling`: `kind: service`, `repo_owner: IQVO`, `database: true`, `analytics: true` (the default key pair `ANALYTICS_DATABASE_URL` and `ANALYTICS_READER_DATABASE_URL`), no web part. |
 | Image | `terraform/targets/k3s.images.yaml` pins `dock-scheduling` at tag `7f20813-arm64`, the commit of this repository's `v0.1.1` tag (also on `origin/main`). |
-| Helm values | `helm-values/dock-scheduling.yaml` sets four stable consumer groups: `dock-scheduling-yard`, `dock-scheduling-facility`, `dock-scheduling-asn`, `dock-scheduling-cpt`; the projector group `dock-scheduling-analytics`; `existingSecret` wiring for `dock-scheduling-db` and `dock-scheduling-analytics-db`; the dedicated relay on (`relay.enabled: true`, redundant beside the inline relay of `cmd/api`); MCP on; analytics on; sweeps on (`/no-show-sweeps` every 5 minutes by CronJob); Kong plugins `cors`, `opentelemetry`, `prometheus`; no A2A block. The legacy importer group `config.dockLegacyImportConsumerGroup` is empty, so strangler stage A is off. |
+| Helm values | `helm-values/dock-scheduling.yaml` sets four stable consumer groups: `dock-scheduling-yard`, `dock-scheduling-facility`, `dock-scheduling-asn`, `dock-scheduling-cpt`; the projector group `dock-scheduling-analytics`; `existingSecret` wiring for `dock-scheduling-db` and `dock-scheduling-analytics-db`; the dedicated relay on (`relay.enabled: true`, redundant beside the inline relay of `cmd/api`); MCP on; analytics on; sweeps on (`/no-show-sweeps` every 5 minutes by CronJob); Kong plugins `cors`, `opentelemetry`, `prometheus`; no A2A block. The retired `config.dockLegacyImportConsumerGroup` key (the legacy importer, removed in ADR 0011) is no longer read by the chart; drop it from the values file. |
 | Kong routes | `/api/dock-scheduling` (prefix stripped), `/api/mcp/dock-scheduling` (to `/mcp`), `/api/dock-scheduling/reports` (to `/reports`). |
 | Observability | One dashboard and six alert rules: see [Observability](/docs/operations/observability#dashboards-and-alerts). |
 | CI | `warehouse-infra` lints the chart and runs its selector check for this service. |
@@ -34,7 +34,7 @@ One image (`ghcr.io/iqvo/dock-scheduling`) carries six binaries; each workload s
 
 | Workload (chart) | Binary | Port | Default | Probes |
 |---|---|---|---|---|
-| Deployment `component=api` | `/app/api`: REST, inline outbox relay, four Kafka consumers (plus the optional legacy importer) | 8080 (Service port 80) | always on | startup, liveness `GET /healthz`; readiness `GET /readyz` |
+| Deployment `component=api` | `/app/api`: REST, inline outbox relay, four Kafka consumers | 8080 (Service port 80) | always on | startup, liveness `GET /healthz`; readiness `GET /readyz` |
 | Deployment `component=mcp` | `/app/mcp` | 8090 | `mcp.enabled=false` | `GET /healthz`, `GET /readyz` |
 | Deployment `component=relay` | `/app/relay` | 8094 (no Service) | `relay.enabled=false` | `GET /healthz` only |
 | Deployment `component=analytics-projector` | `/app/projector` | 8091 (no Service) | `analytics.enabled=false` | `/healthz`, `/readyz` |
@@ -79,7 +79,7 @@ One broker platform-wide (`KAFKA_BROKERS`). The service never creates topics; th
 | Produced | `warehouse.dock-scheduling.events.dlq` | relay, for rows that can never be encoded | none |
 | Consumed | `warehouse.yard-management.events` | `cmd/api` yard consumer | `YARD_CONSUMER_GROUP` |
 | Consumed | `warehouse.facility.events` | `cmd/api` facility consumer | `FACILITY_CONSUMER_GROUP` |
-| Consumed | `warehouse.inbound-receiving.events` | `cmd/api` ASN consumer, and the optional legacy importer | `ASN_CONSUMER_GROUP`, `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` |
+| Consumed | `warehouse.inbound-receiving.events` | `cmd/api` ASN consumer | `ASN_CONSUMER_GROUP` |
 | Consumed | `warehouse.process-path-management.events` | `cmd/api` cutoff consumer | `CPT_CONSUMER_GROUP` |
 | Consumed | `warehouse.dock-scheduling.analytics` | `cmd/projector` | `ANALYTICS_CONSUMER_GROUP` (chart default `dock-scheduling-analytics`) |
 | Dead letters of consumed topics | `<consumed topic>.dlq` (headers `x-dlq-source-topic`, `x-dlq-cause`) | each consumer | none |
@@ -121,7 +121,6 @@ Nothing in the service calls `POST /no-show-sweeps` on a timer. The chart's Cron
 |---|---|
 | Roll out a new image | Change `image.tag`; the `checksum/config` annotation rolls the api pods when the ConfigMap changes. Readiness holds traffic until Postgres and Kafka answer. |
 | Change a tuning knob | Set the matching `config.*` value (see [Configuration](/docs/operations/configuration)) and roll. |
-| Turn the legacy importer on | Set `config.dockLegacyImportConsumerGroup` only after the facility consumer has caught up on doors (an import for an unknown door is skipped and counted as `unknown_door`); unset it at strangler stage E. |
 | Check the outbox backlog | `SELECT count(*), min(created_at) FROM outbox;` and `SELECT id, aggreg_type, attempts FROM outbox WHERE attempts >= 20;` |
 | Re-arm an excluded outbox row | `UPDATE outbox SET attempts = 0, next_attempt_at = now() WHERE id = <id>;` |
 | Check analytics freshness | `GET /reports/freshness` on `cmd/reports`: `asOf` and `lagSeconds`. |

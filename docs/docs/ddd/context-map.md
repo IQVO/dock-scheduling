@@ -33,7 +33,6 @@ flowchart LR
     YM1 -->|"U/D: C/S<br/>Kafka VisitCheckedIn,<br/>VisitRejected,<br/>TrailerDocked,<br/>TrailerUndocked"| DS
     FL -->|"U/D: CF<br/>Kafka slots, zones"| DS
     IR1 -->|"U/D: CF<br/>Kafka ASNRegistered,<br/>ASNCancelled"| DS
-    IR1 -.->|"transitional<br/>legacy appointment<br/>events, stage A to D"| DS
     PP -->|"U/D: CF<br/>Kafka<br/>CPTScheduleChanged"| DS
     CS -->|"OHS - REST<br/>appointments"| DS
     DP -->|"UI - REST<br/>dock-calendar,<br/>reschedule, cancel"| DS
@@ -46,10 +45,10 @@ flowchart LR
     DS -.->|"OHS - REST GET<br/>appointments, doors,<br/>dock-calendar"| ANY
 ```
 
-Source: `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`, `internal/adapters/inbound/kafka/legacy_import_consumer.go`.
+Source: `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`.
 
 Legend: arrows point from upstream to downstream. Solid = events or
-commands; dotted = synchronous query, or the transitional legacy feed.
+commands; dotted = synchronous query.
 `yard-management` and `inbound-receiving` appear twice because they are on
 both sides: they feed this context and they consume from it. People are
 rounded boxes. Patterns on the edges to `warehouse-planning`,
@@ -72,7 +71,7 @@ retail-network service.
 | --- | --- | --- | --- | --- | --- |
 | `yard-management` (Supporting) | Upstream for yard facts; downstream for appointments (**mutual**) | **Customer/Supplier** both ways (the design model names it on both inbound rows) | Kafka `warehouse.yard-management.events` into this context; `warehouse.dock-scheduling.events` out | In: `VisitCheckedIn`, `VisitRejected`, `TrailerDocked`, `TrailerUndocked`. Out: `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentNoShow`, `DoorClosureScheduled`, `DoorClosureLifted` | The two flows are independent (plan against physical) and neither writes into the other's aggregates. Each side shapes its events for the other and keeps an event-fed local copy; no synchronous call in either direction. |
 | `facility-layout` | Upstream | **Conformist** | Kafka `warehouse.facility.events` | `LocationSlotRegistered`, `LocationSlotDecommissioned`, `ZoneRegistered` | `facility-layout` is the registry of slots and zones for every context. Dock slots, `dockFlow` and the zone to site join are taken as given into `DoorView`. |
-| `inbound-receiving` | Upstream for ASNs (and, until stage E, for legacy appointments); downstream for appointments | **Conformist** for ASNs; consumer of this context's `Booked`, `Rescheduled`, `Cancelled` and `DoorReassigned` | Kafka `warehouse.inbound-receiving.events` in; `warehouse.dock-scheduling.events` out | In: `ASNRegistered`, `ASNCancelled`; transitional: `DockAppointmentBooked`, `DockAppointmentCheckedIn`, `DockAppointmentCancelled`, `DockAppointmentCompleted`. Out: `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentDoorReassigned` | ASNs are taken as given into `AsnView`. The appointment moved to this context (YD-0002): `inbound-receiving` retired its appointment write routes and keeps an appointments copy fed by this context (its ADR 0019). The legacy feed exists only so each appointment is imported once (policy `LegacyImport`, off unless its group is set) and is removed at stage E. |
+| `inbound-receiving` | Upstream for ASNs; downstream for appointments | **Conformist** for ASNs; consumer of this context's `Booked`, `Rescheduled`, `Cancelled` and `DoorReassigned` | Kafka `warehouse.inbound-receiving.events` in; `warehouse.dock-scheduling.events` out | In: `ASNRegistered`, `ASNCancelled`. Out: `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentDoorReassigned` | ASNs are taken as given into `AsnView`. The appointment moved to this context (YD-0002): `inbound-receiving` retired its appointment write routes and keeps an appointments copy fed by this context (its ADR 0019). The legacy import feed (policy `LegacyImport`) was removed in ADR 0011. |
 | `process-path-management` | Upstream | **Conformist** | Kafka `warehouse.process-path-management.events` | `CPTScheduleChanged` | The CPT schedule is the fleet's own outbound cutoff; it is taken as given into `CutoffView`. |
 | Carrier scheduler (carrier portal) | Upstream (person or carrier system) | **OHS** on this context's REST | REST `POST /appointments`, `.../reschedules`, `.../cancellations`, `.../eta-reports` | `BookAppointment`, `RescheduleAppointment`, `CancelAppointment`, `ReportEta` | Carriers are outside the fleet; the contract is one published REST surface. |
 | Dock planner | Upstream (person, console) | UI on this context's REST | REST `PUT .../operating-hours`, `PUT .../settings`, `POST .../closures`, `POST .../closures/{closureId}/lifts` | `DeclareOperatingHours`, `DeclareCalendarSettings`, `ScheduleDoorClosure`, `LiftDoorClosure`; also `RescheduleAppointment` and `CancelAppointment` on behalf of a carrier (D-5) | Human maintenance of the door calendar. |

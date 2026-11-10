@@ -46,7 +46,8 @@ Kept on purpose:
   historical: nothing in this service sets it, and `Rehydrate` still accepts it so a stored row (none exists on the cluster) could
   still be read. A later decision with a named reason can retire it as a `v2`.
 - **The door exclusion constraint's scope** (ADR 0005 A19: native, non-override, active rows). Legacy rows were one of the exclusions;
-  the constraint is unchanged, no migration.
+  the constraint and the `provenance` check constraint are unchanged, no migration. The repository contract test that stored a legacy
+  import (`legacy-backstops`) is deleted with `ImportLegacy`, the only way to build such a row.
 
 ## Consequences
 

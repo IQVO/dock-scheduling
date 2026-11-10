@@ -43,7 +43,7 @@ integration types on the events channel, all eleven on the analytics channel.
 
 | Event | Full `type` | Stream | `data` fields | Producing command | Consumers |
 | --- | --- | --- | --- | --- | --- |
-| `DockAppointmentBooked` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` | integration + analytics twin | `appointment_id`, `site_id`, `direction`, `door_code`, `carrier`, `carrier_scac`, `window_start`, `window_end`, `asn_numbers`, `cpt_id`, `shipment_refs`, `expected_seal_number`, `arrival_tolerance_minutes`, `provenance`, `version` | `BookAppointment`; `ImportLegacyAppointment` (policy `LegacyImport`, provenance `legacy-import`) | `yard-management`, `warehouse-planning`, `inbound-receiving`, `outbound-shipping` |
+| `DockAppointmentBooked` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` | integration + analytics twin | `appointment_id`, `site_id`, `direction`, `door_code`, `carrier`, `carrier_scac`, `window_start`, `window_end`, `asn_numbers`, `cpt_id`, `shipment_refs`, `expected_seal_number`, `arrival_tolerance_minutes`, `provenance`, `version` | `BookAppointment` | `yard-management`, `warehouse-planning`, `inbound-receiving`, `outbound-shipping` |
 | `DockAppointmentRescheduled` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `previous_door_code`, `window_start`, `window_end`, `previous_window_start`, `previous_window_end`, `arrival_tolerance_minutes`, `version` | `RescheduleAppointment` (window and/or door; carries `previous_door_code`) | `yard-management`, `warehouse-planning`, `inbound-receiving` |
 | `DockAppointmentCancelled` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `reason`, `version` | `CancelAppointment` (carrier or planner request; policies `CancelOnVisitRejected` with `TURNED_AWAY` and `CancelWhenAllAsnsCancelled` with `ASN_CANCELLED`) | `yard-management`, `warehouse-planning`, `inbound-receiving` |
 | `DockAppointmentNoShow` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `direction`, `carrier_scac`, `window_end`, `version` | `MarkNoShow` (policy `NoShowSweep`) | `yard-management`, `warehouse-planning`, `exception-management` |
@@ -112,7 +112,7 @@ in the same transaction as the effect) and dispatches on the full `type` string,
 suffix (`conventions.integration_rules`). A fact that is valid but changes nothing (an
 unknown or terminal appointment, a site mismatch, an unknown door) is counted in
 `dock_scheduling_ignored_facts_total` and committed; a payload that can never be applied
-is dead-lettered to `<topic>.dlq`. The five consumers and their environment variables
+is dead-lettered to `<topic>.dlq`. The four consumers and their environment variables
 are in the service's ADR 0009. The full types: `yard-management` events are
 `com.warehouse.wms.yard-management.<entity>.<EventName>` (entity `yardvisit` or `trailer`),
 `process-path-management` is in the `wes` tier
@@ -131,13 +131,9 @@ are read from each producer's AsyncAPI.
 | `inbound-receiving` | `ASNRegistered`, `warehouse.inbound-receiving.events` | `asn_number`, `expected_arrival`, `lines` | Inserts the ASN into `AsnView` (`asns`) | Upsert on `asn_number`; a cancelled ASN stays cancelled |
 | `inbound-receiving` | `ASNCancelled`, `warehouse.inbound-receiving.events` | `asn_number` | Marks the ASN cancelled in `AsnView`; policy `CancelWhenAllAsnsCancelled` cancels an `INBOUND` `BOOKED` appointment whose ASNs are all cancelled, reason `ASN_CANCELLED` | A cancelled appointment is skipped |
 | `process-path-management` | `CPTScheduleChanged`, `warehouse.process-path-management.events` | `site_id`, `timezone`, `cutoffs` | Stores the schedule in `CutoffView` (`cutoff_schedules`, `cutoffs`). Phase 2, not built: policy `PickupFromCutoffs` would keep `OUTBOUND` appointments; today no appointment is created from it (D-3) | The whole schedule of a site replaces the previous one; the event has no version, the inbox claim makes a replay a no-op |
-| `inbound-receiving` (stage A to D) | `DockAppointmentBooked`, `warehouse.inbound-receiving.events` | `appointment_id`, window, door | Policy `LegacyImport`: `ImportLegacyAppointment`, once per appointment (provenance `legacy-import`, direction `INBOUND`, version 1, `carrier_scac` null); raises `DockAppointmentBooked`. An unknown door skips the event and counts it | One import per appointment id; no window, hours, closure, overlap or ASN check (D-2) |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCheckedIn`, `warehouse.inbound-receiving.events` | `appointment_id` | Moves only a `legacy-import` appointment to `CHECKED_IN`, classified with the site's tolerance like any gate arrival | Other provenance, unknown ids: ignored and counted |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCancelled`, `warehouse.inbound-receiving.events` | `appointment_id` | Cancels only a `legacy-import` appointment, reason `CARRIER_REQUEST` | Same |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCompleted`, `warehouse.inbound-receiving.events` | `appointment_id` | Completes only a `legacy-import` appointment | Same |
 
-The legacy importer reads the same topic as the ASN consumer under its own group
-(`DOCK_LEGACY_IMPORT_CONSUMER_GROUP`) and is **off** when that variable is unset.
+The legacy importer that once read this topic under its own group was removed in ADR 0011: this
+context consumes no `inbound-receiving` `dockappointment.*` type.
 
 Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`, `internal/application/ports/ports.go`, `migrations/0001_dock_scheduling.up.sql`.
 
