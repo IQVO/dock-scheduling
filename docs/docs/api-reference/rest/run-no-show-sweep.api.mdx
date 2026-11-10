@@ -1,0 +1,73 @@
+---
+id: run-no-show-sweep
+title: "Run the no-show sweep"
+description: "Marks every `BOOKED` appointment whose `windowEnd` plus the site's no-show grace has passed as `NO_SHOW`, each in its"
+sidebar_label: "Run the no-show sweep"
+hide_title: true
+hide_table_of_contents: true
+api: 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
+sidebar_class_name: "post api-method"
+info_path: docs/api-reference/rest/dock-scheduling-api
+custom_edit_url: null
+hide_send_button: true
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Run the no-show sweep"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/no-show-sweeps"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Marks every `BOOKED` appointment whose `windowEnd` plus the site's no-show grace has passed as `NO_SHOW`, each in its
+own transaction, and answers the ids it marked. Naturally idempotent (a second run marks nothing new); driven by a
+CronJob. Requires an `Idempotency-Key` like every POST. Publishes `DockAppointmentNoShow` per appointment.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./run-no-show-sweep.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./run-no-show-sweep.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./run-no-show-sweep.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

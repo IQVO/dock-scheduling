@@ -1,3 +1,10 @@
+---
+id: before-first-release
+title: Before the first release
+sidebar_label: Before the first release
+description: "The packaging checklist to finish before the first develop to main PR of dock-scheduling, with its state on develop."
+---
+
 # Before the first release: dock-scheduling
 
 The first merge to `main` runs `docker-publish` and `release`. Two services built from
@@ -32,3 +39,38 @@ Tick this list in the PR that adds `Dockerfile`/chart wiring, and keep the file:
 service's packaging record. Reference for the three failures this list prevents: a runtime that
 can run without Postgres/Kafka (row 1), Go files at the root (row 2), a release that fails on
 the first push to `main` because packaging was never built (rows 3-8).
+
+## State on develop
+
+Checked against the code of `origin/develop`; the checklist is a record, so re-check each row before the PR to `main`.
+
+| # | State | Evidence |
+|---|-------|----------|
+| 1 | Met | `cmd/api` refuses to boot without `DATABASE_URL`, `KAFKA_BROKERS` and the four `*_CONSUMER_GROUP` variables (`cmd/api/config.go`); `TestRuntimeBinaryHasNoInMemoryAdapters` is in `internal/architecture`. |
+| 2 | Met | No `.go` file at the repo root; the godog runner is `features/features_test.go`; `TestNoGoFilesAtRepoRoot` exists. |
+| 3 | Met | The `Dockerfile` builds every `cmd/*` (six binaries) into `/app`; `ENTRYPOINT ["./api"]`, `EXPOSE 8080 8090 8091 8092 8094` covers the API, MCP, projector, reports and relay ports. |
+| 4 | Met | `.dockerignore` excludes `.git`, `.github`, `*.md`, `docs/`, `charts/`, `web/`. |
+| 5 | Met | `charts/dock-scheduling/Chart.yaml`; CI has `helm-lint` and the `release` job. |
+| 6 | Met | `DATABASE_URL` is a `secretKeyRef` in every Deployment; the chart refuses to render without `database.url` or `database.existingSecret`. |
+| 7 | Partly | Hardening is in `values.yaml`. `terminationGracePeriodSeconds` is 40 and `render_test.sh` refuses lower values, but the code's await bounds (consumers 30 s, relay 30 s) exceed the 10 s budgeted in the comment. See the [runbook](/docs/operations/runbook). |
+| 8 | Met | `charts/dock-scheduling/tests/` holds `render_test.sh`, `test_service_selectors.py` and `test_sweeps_cronjob.py`; the `chart-tests` job runs them. |
+| 9 | Met | The five consumer groups are chart values; the chart refuses to render an empty one. |
+| 10 | Met | `ci.yml` has `api-lint` (three specs) and no `web` or `docs-api-drift` job, matching a repo with neither `web/` nor a generated-docs drift check. |
+| 11 | Not verified | Registry access is an org setting; not checked from the repository. |
+| 12 | Not verified | `make vuln` was not run for this page. |
+
+## Platform registration in warehouse-infra
+
+The packaging rows above say nothing of the platform side, which lives in `warehouse-infra`. State on its `origin/develop`:
+
+| Item | State | Evidence |
+|---|---|---|
+| `terraform/apps.yaml` entry (`kind: service`, `database: true`, `analytics: true`, no web part) | Done | `warehouse-infra` PR 193, commit `b4b827e`, entry `dock-scheduling`. |
+| `helm-values/dock-scheduling.yaml` (stable `dock-scheduling-*` consumer groups, `existingSecret` wiring, reports and MCP routes, relay, sweeps, Kong plugins) | Done | PR 193, commit `b4b827e`. |
+| Dashboard and alert rules | Done | PR 193, commit `b4b827e`: `terraform/dashboards/contexts/dock-scheduling.json` and six rules in `terraform/alerting/warehouse-alert-rules.json` (see [Observability](/docs/operations/observability#dashboards-and-alerts)). |
+| Chart lint and selector check in `warehouse-infra` CI | Done | PR 193, commit `b4b827e` (`.github/workflows/ci.yml`, `scripts/check-chart-selectors.py`). |
+| Image pinned | Done | Commit `c42c475` pins `dock-scheduling` at `7f20813-arm64`, this repository's `v0.1.1` commit on `main`. |
+| Yard-domain Kafka topics pre-created before the first sync | Documented, not done | `docs/kafka-topics-yard-dock.md` in `warehouse-infra` (PR 193) gives the command; no pod has been synced, and whether the topics exist on the broker was not checked. |
+| Applied to the k3s cluster | Not done | `kubectl get pods -n warehouse-systems` lists no `dock-scheduling` pod (checked 2026-11-09). |
+
+The service is **built on develop, registered in warehouse-infra develop, not applied to the cluster.** The ADR bodies in `docs/adr/` are not edited by this update.

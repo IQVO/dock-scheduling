@@ -94,7 +94,7 @@ func NewTransport(brokers []string, logger *slog.Logger) Transport {
 // the first offset, so a fresh deployment replays the topic and the local
 // copies converge.
 func readerConfig(brokers []string, topic, groupID string) kafkago.ReaderConfig {
-	return kafkago.ReaderConfig{Brokers: brokers, Topic: topic, GroupID: groupID, MaxWait: 500 * time.Millisecond}
+	return kafkago.ReaderConfig{Brokers: brokers, Topic: topic, GroupID: groupID}
 }
 
 func defaultLogger(logger *slog.Logger) *slog.Logger {

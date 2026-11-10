@@ -1,0 +1,73 @@
+---
+id: list-appointments
+title: "List appointments"
+description: "Lists appointments ordered by window start then id, one page at a time (`limit`, `cursor`; keyset). An empty result"
+sidebar_label: "List appointments"
+hide_title: true
+hide_table_of_contents: true
+api: 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
+sidebar_class_name: "get api-method"
+info_path: docs/api-reference/rest/dock-scheduling-api
+custom_edit_url: null
+hide_send_button: true
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"List appointments"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/appointments"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Lists appointments ordered by window start then id, one page at a time (`limit`, `cursor`; keyset). An empty result
+is `200` with `{"items": []}`. All filters are optional and must be repeated on every page request. `from` and `to`
+select appointments whose window overlaps `[from, to)`.
+
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./list-appointments.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./list-appointments.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./list-appointments.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      

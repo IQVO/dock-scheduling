@@ -197,3 +197,17 @@ func TestSleepCtx_ReturnsOnCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestReaderConfigLeavesMaxWaitToTheLibraryDefault: the first byte of a fetch
+// response must arrive within MaxWait or the read fails with "i/o timeout". A
+// short value (it was 500ms) made every consumer log hundreds of reader errors
+// a minute on a slightly slow shared broker.
+func TestReaderConfigLeavesMaxWaitToTheLibraryDefault(t *testing.T) {
+	cfg := readerConfig([]string{"broker:9092"}, "t", "g")
+	if cfg.MaxWait != 0 {
+		t.Fatalf("MaxWait = %v: leave it unset (kafka-go default 10s)", cfg.MaxWait)
+	}
+	if cfg.GroupID != "g" || cfg.Topic != "t" {
+		t.Fatalf("config %+v", cfg)
+	}
+}
