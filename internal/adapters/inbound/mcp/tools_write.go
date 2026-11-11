@@ -24,21 +24,38 @@ type attribution struct {
 	AgentID        string `json:"agentId,omitempty" jsonschema:"optional id of the calling agent, recorded for attribution (max 128 characters)"`
 }
 
-// write runs one state-changing tool with the cross-cutting rules of every
-// agent write: key shape, initiator, REST-equivalent idempotency, audit log.
-// args is what the fingerprint covers (the business arguments, not the key or
-// the labels); run executes the use case with the initiator in its context.
+// write runs one state-changing appointment tool with the cross-cutting rules
+// of every agent write (see writeTool). args is what the fingerprint covers
+// (the business arguments, not the key or the labels); run executes the use
+// case with the initiator in its context.
 func (d Deps) write(ctx context.Context, tool string, att attribution, args any, run func(ctx context.Context) (writeOut, error)) (writeOut, error) {
+	return writeTool[writeOut](ctx, d, tool, att, args, run)
+}
+
+// writeAnswer is what the result type of a write tool offers writeTool: the
+// stamp of the attribution (stored with the answer of the key), the replayed
+// flag (set on a replay only) and the fields of the audit log line.
+type writeAnswer[O any] interface {
+	*O
+	attribute(initiatedByOut)
+	markReplayed(bool)
+	logFields() []any
+}
+
+// writeTool runs one state-changing tool with the cross-cutting rules of every
+// agent write: key shape, initiator, REST-equivalent idempotency, audit log.
+func writeTool[O any, P writeAnswer[O]](ctx context.Context, d Deps, tool string, att attribution, args any, run func(ctx context.Context) (O, error)) (O, error) {
+	var zero O
 	if err := usecases.ValidateIdempotencyKey(att.IdempotencyKey); err != nil {
-		return writeOut{}, err
+		return zero, err
 	}
 	initiator, err := usecases.NewInitiator(usecases.ViaMCP, att.ProposalID, att.ApprovedBy, att.AgentID)
 	if err != nil {
-		return writeOut{}, err
+		return zero, err
 	}
 	fp, err := usecases.Fingerprint(tool, args)
 	if err != nil {
-		return writeOut{}, err
+		return zero, err
 	}
 	trace.SpanFromContext(ctx).SetAttributes(
 		attribute.String("initiated_by.via", string(initiator.Via())),
@@ -51,21 +68,21 @@ func (d Deps) write(ctx context.Context, tool string, att attribution, args any,
 		if err != nil {
 			return nil, err
 		}
-		out.InitiatedBy = toInitiatedBy(initiator)
+		P(&out).attribute(toInitiatedBy(initiator))
 		return json.Marshal(out)
 	}, classify)
 	if err != nil {
-		return writeOut{}, err
+		return zero, err
 	}
-	var out writeOut
+	var out O
 	if err := json.Unmarshal(outcome.Body, &out); err != nil {
-		return writeOut{}, errors.New("the stored answer of the idempotency key is unreadable")
+		return zero, errors.New("the stored answer of the idempotency key is unreadable")
 	}
-	out.Replayed = outcome.Replayed
-	trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("idempotency.replayed", out.Replayed))
-	slog.InfoContext(ctx, "mcp write", "tool", tool, "appointment_id", out.Appointment.AppointmentID, "state", out.Appointment.State,
-		"via", string(initiator.Via()), "agent_id", initiator.AgentID(), "proposal_id", initiator.ProposalID(),
-		"approved_by", initiator.ApprovedBy(), "replayed", out.Replayed)
+	P(&out).markReplayed(outcome.Replayed)
+	trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("idempotency.replayed", outcome.Replayed))
+	fields := append([]any{"tool", tool}, P(&out).logFields()...)
+	slog.InfoContext(ctx, "mcp write", append(fields, "via", string(initiator.Via()), "agent_id", initiator.AgentID(), "proposal_id", initiator.ProposalID(),
+		"approved_by", initiator.ApprovedBy(), "replayed", outcome.Replayed)...)
 	return out, nil
 }
 

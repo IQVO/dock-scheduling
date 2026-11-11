@@ -29,15 +29,21 @@ const authorityKey = "com.warehouse/authority"
 var wantLevels = map[string]string{
 	"list_appointments": "L1", "get_appointment": "L1", "get_door_availability": "L1", "get_dock_calendar": "L1", "list_at_risk_appointments": "L1",
 	"book_appointment": "L3", "reschedule_appointment": "L3", "cancel_appointment": "L3", "report_eta": "L3",
+	// The carrier registry (ADR 0012): two reads, three writes.
+	"list_carriers": "L1", "get_carrier": "L1",
+	"register_carrier": "L3", "suspend_carrier": "L3", "reinstate_carrier": "L3",
 }
 
 // writeTools are the only tools allowed to change state; each is a verb of the
 // REST contract that carrier schedulers and dock planners already use.
-var writeTools = []string{"book_appointment", "cancel_appointment", "report_eta", "reschedule_appointment"}
+var writeTools = []string{
+	"book_appointment", "cancel_appointment", "register_carrier", "reinstate_carrier", "report_eta", "reschedule_appointment", "suspend_carrier",
+}
 
-// maxTools is the tool budget (the charter's eight plus the ninth D-6 names).
-// Raising it is a deliberate, reviewed act: an ADR 0007 amendment.
-const maxTools = 9
+// maxTools is the tool budget: the charter's eight plus the ninth D-6 names,
+// plus the five carrier registry tools of ADR 0012 (which amends ADR 0007).
+// Raising it is a deliberate, reviewed act: an ADR amendment.
+const maxTools = 14
 
 // outOfScopeWords must never appear in a tool name: arrival, check-in and door
 // release are yard facts applied from Kafka (decision: "physical facts owned by
@@ -146,8 +152,9 @@ func checkToolArguments(t *testing.T, tool *sdk.Tool) {
 	}
 }
 
-// The five reads and four writes of decision D-6, none more: this is the test
-// that fails when a tenth tool, or a state change on a read tool, appears.
+// The reads and writes of decision D-6 and the carrier registry (ADR 0012),
+// none more: this is the test that fails when a fifteenth tool, or a state
+// change on a read tool, appears.
 func TestWriteToolsAreExactlyTheBookingVerbs(t *testing.T) {
 	var writes []string
 	for _, tool := range listTools(t, newHarness(t)) {

@@ -491,5 +491,5 @@ projectors; the `AdherenceReport` projector reads this context's own
 analytics topic.
 
 Omitted: the HTTP read path (`GET` routes read the repositories and
-`DoorAvailabilityView` directly); the MCP adapter (`internal/adapters/inbound/mcp`, nine tools: five
-L1 reads and four L3 writes, service ADR 0007), the analytics projector and the report binary. There are no outbound HTTP clients: `sync_calls` is empty.
+`DoorAvailabilityView` directly); the MCP adapter (`internal/adapters/inbound/mcp`, fourteen tools: seven
+L1 reads and seven L3 writes, service ADRs 0007 and 0012), the analytics projector and the report binary. There are no outbound HTTP clients: `sync_calls` is empty.

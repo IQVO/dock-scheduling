@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["reason"],"additionalProperties":false,"properties":{"reason":{"type":"string","minLength":1,"maxLength":200}},"title":"SuspendCarrierRequest"},"example":{"reason":"insurance lapsed"}}}}}

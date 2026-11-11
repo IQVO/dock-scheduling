@@ -1,7 +1,7 @@
 # 4. CloudEvents catalogue
 
 Status: Accepted. Every message is CloudEvents 1.0 structured JSON built by `internal/adapters/kafka/cloudevents`:
-`source` `/warehouse/dock-scheduling`, `subject` = aggregate id (appointment id, or site id for calendar events), `time` = the
+`source` `/warehouse/dock-scheduling`, `subject` = aggregate id (appointment id, site id for calendar events, SCAC for carrier events), `time` = the
 domain instant (UTC), `datacontenttype` `application/json`, `dataschema` `urn:warehouse:dock-scheduling:events:<EventName>:v1`
 (`urn:warehouse:dock-scheduling:analytics:<EventName>:v1` on the analytics stream). Kafka key = subject. Topics
 `warehouse.dock-scheduling.events` (integration) and `warehouse.dock-scheduling.analytics` (this service's read side; every
@@ -22,9 +22,12 @@ One `type:` line per published type and stream:
 | DoorClosureScheduled | events (key site_id) | yard-management | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled |
 | DoorClosureLifted | events (key site_id) | yard-management | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted |
 | DoorOperatingHoursDeclared | analytics only (key site_id) | analytics only | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared |
+| CarrierRegistered | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered |
+| CarrierSuspended | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended |
+| CarrierReinstated | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated |
 
 Analytics-only events go ONLY to `warehouse.dock-scheduling.analytics`. The version of an appointment event is the aggregate
-version after the change; calendar events carry the DockCalendar version. DockAppointmentAtRisk has no `version` (it is advisory
+version after the change; calendar events carry the DockCalendar version; carrier events (ADR 0012, subject and key = the SCAC) carry the Carrier version. DockAppointmentAtRisk has no `version` (it is advisory
 and does not change the aggregate beyond the ETA report that caused it).
 
 Data fields per event are the AsyncAPI schemas in `apis/asyncapi.yaml` and the golden JSON files in

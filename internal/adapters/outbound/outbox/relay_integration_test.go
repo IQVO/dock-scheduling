@@ -20,6 +20,7 @@ import (
 	outboundkafka "github.com/claudioed/dock-scheduling/internal/adapters/outbound/kafka"
 	relay "github.com/claudioed/dock-scheduling/internal/adapters/outbound/outbox"
 	"github.com/claudioed/dock-scheduling/internal/adapters/outbound/postgres"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -178,12 +179,20 @@ func calendarFacts(t *testing.T) []dockcalendar.Event {
 	}
 }
 
-// TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes: all eleven
-// published facts of ADR 0004 are written through the production
+func carrierFacts() []carrier.Event {
+	return []carrier.Event{
+		carrier.RegisteredEvent{Header: carrier.Header{Scac: "ACMF", Version: 1, At: at(10, 14, 0, 0)}, Name: "ACME Freight", USDOT: "1234567", MC: "MC654321", Status: carrier.Active},
+		carrier.SuspendedEvent{Header: carrier.Header{Scac: "ACMF", Version: 2, At: at(10, 15, 30, 0)}, Reason: "insurance lapsed", SuspendedAt: at(10, 15, 30, 0)},
+		carrier.ReinstatedEvent{Header: carrier.Header{Scac: "ACMF", Version: 3, At: at(11, 9, 0, 0)}, ReinstatedAt: at(11, 9, 0, 0)},
+	}
+}
+
+// TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes: all fourteen
+// published facts of ADR 0004 and ADR 0012 are written through the production
 // OutboxPublisher inside real unit-of-work transactions; the production relay
 // and RelaySink publish them, in outbox order. The events topic carries
-// exactly the seven integration facts (ADR 0010 added the door reassignment)
-// and the analytics topic all eleven; every
+// exactly the ten integration facts (ADR 0010 added the door reassignment, ADR
+// 0012 the three carrier facts) and the analytics topic all fourteen; every
 // message matches its golden envelope exactly.
 func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	ctx := context.Background()
@@ -206,6 +215,9 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 		"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", // DoorClosureScheduled
 		"5d4c3b2a-1f0e-4d9c-ab8a-7f6e5d4c3b2a", // DoorClosureLifted
 		"9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", // DoorOperatingHoursDeclared
+		"7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e", // CarrierRegistered (ADR 0012)
+		"b8a79685-7463-4e52-8d41-30f2e1d0c9ba", // CarrierSuspended
+		"e9f8a7b6-c5d4-4e3f-a2b1-0c9d8e7f6a5b", // CarrierReinstated
 	)
 	uow := postgres.NewUnitOfWork(pool)
 	if err := uow.Do(ctx, func(ctx context.Context) error { return pub.PublishAppointmentEvents(ctx, appointmentFacts()...) }); err != nil {
@@ -214,12 +226,15 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	if err := uow.Do(ctx, func(ctx context.Context) error { return pub.PublishCalendarEvents(ctx, calendarFacts(t)...) }); err != nil {
 		t.Fatalf("calendar unit of work: %v", err)
 	}
+	if err := uow.Do(ctx, func(ctx context.Context) error { return pub.PublishCarrierEvents(ctx, carrierFacts()...) }); err != nil {
+		t.Fatalf("carrier unit of work: %v", err)
+	}
 
 	sink := outboundkafka.NewRelaySink(strings.Join(brokers, ","))
 	r := relay.NewOutboxRelay(postgres.NewOutboxStore(pool), sink, quiet(), relay.WithMaxAttempts(relay.DefaultMaxAttempts))
 	runRelay(t, r, sink)
 
-	integration := kafkatest.ReadN(t, outboundkafka.TopicEvents, 7, 60*time.Second)
+	integration := kafkatest.ReadN(t, outboundkafka.TopicEvents, 10, 60*time.Second)
 	for i, w := range []struct{ key, golden string }{
 		{apptID, "dock_appointment_booked.golden.json"},
 		{apptID, "dock_appointment_rescheduled.golden.json"},
@@ -228,11 +243,14 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 		{apptID, "dock_appointment_door_reassigned.golden.json"}, // ADR 0010
 		{"WH1", "door_closure_scheduled.golden.json"},
 		{"WH1", "door_closure_lifted.golden.json"},
+		{"ACMF", "carrier_registered.golden.json"}, // ADR 0012
+		{"ACMF", "carrier_suspended.golden.json"},
+		{"ACMF", "carrier_reinstated.golden.json"},
 	} {
 		assertEnvelope(t, integration[i], w.key, w.golden)
 	}
 
-	analytics := kafkatest.ReadN(t, outboundkafka.TopicAnalytics, 11, 60*time.Second)
+	analytics := kafkatest.ReadN(t, outboundkafka.TopicAnalytics, 14, 60*time.Second)
 	for i, w := range []struct{ key, golden string }{
 		{apptID, "dock_appointment_booked_analytics.golden.json"},
 		{apptID, "dock_appointment_rescheduled_analytics.golden.json"},
@@ -245,13 +263,16 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 		{"WH1", "door_closure_scheduled_analytics.golden.json"},
 		{"WH1", "door_closure_lifted_analytics.golden.json"},
 		{"WH1", "door_operating_hours_declared_analytics.golden.json"},
+		{"ACMF", "carrier_registered_analytics.golden.json"},
+		{"ACMF", "carrier_suspended_analytics.golden.json"},
+		{"ACMF", "carrier_reinstated_analytics.golden.json"},
 	} {
 		assertEnvelope(t, analytics[i], w.key, w.golden)
 	}
 
 	// Analytics-only facts never reach the integration topic.
-	if n := kafkatest.EndOffset(t, outboundkafka.TopicEvents); n != 7 {
-		t.Errorf("the events topic holds %d messages, want exactly the 7 integration facts", n)
+	if n := kafkatest.EndOffset(t, outboundkafka.TopicEvents); n != 10 {
+		t.Errorf("the events topic holds %d messages, want exactly the 10 integration facts", n)
 	}
 	// Every published row left the outbox (delete-on-publish).
 	waitFor(t, "the outbox to drain", 10*time.Second, func() bool { return pgtest.Count(t, pool, "outbox") == 0 })

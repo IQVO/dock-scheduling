@@ -120,3 +120,30 @@ type SweepResult struct {
 	AppointmentIDs []string
 	RanAt          time.Time
 }
+
+// CarrierView is one registered carrier as the REST and MCP adapters show it.
+type CarrierView struct {
+	SCAC             string
+	Name             string
+	USDOT            string
+	MC               string
+	Status           string
+	SuspensionReason string
+	SuspendedAt      *time.Time
+	Version          int64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+// CarrierPage is one keyset page of carriers.
+type CarrierPage struct {
+	Items      []CarrierView
+	NextCursor string
+}
+
+// CarrierResult is the answer of a registration: the carrier and whether this
+// call created it (false: it was already registered with the same data).
+type CarrierResult struct {
+	Carrier CarrierView
+	Created bool
+}

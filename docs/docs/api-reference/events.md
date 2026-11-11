@@ -2,14 +2,14 @@
 id: events
 title: Events
 sidebar_label: Events
-description: "The CloudEvents catalogue of dock-scheduling: the eleven published events, the ten consumed ones, topics, keys, envelope and delivery guarantees."
+description: "The CloudEvents catalogue of dock-scheduling: the fourteen published events, the ten consumed ones, topics, keys, envelope and delivery guarantees."
 ---
 
 # Events
 
-dock-scheduling publishes **eleven** event types and consumes **ten**, all as CloudEvents 1.0 (structured JSON mode) on Kafka. The contract is `apis/asyncapi.yaml` (AsyncAPI 2.6.0); the catalogue is guarded by `TestEventCatalogueMatchesContract`. The narrative and the policies behind each event are on [Domain events](/docs/ddd/domain-events).
+dock-scheduling publishes **fourteen** event types and consumes **ten**, all as CloudEvents 1.0 (structured JSON mode) on Kafka. The contract is `apis/asyncapi.yaml` (AsyncAPI 2.6.0); the catalogue is guarded by `TestEventCatalogueMatchesContract`. The narrative and the policies behind each event are on [Domain events](/docs/ddd/domain-events).
 
-Source: `apis/asyncapi.yaml`, `internal/adapters/outbound/kafka/encoder.go` (`routeOf`, the ADR 0004 catalogue), `internal/adapters/kafka/cloudevents/cloudevents.go`, `internal/adapters/inbound/kafka/*_consumer.go`, [ADR 0004](/docs/adr/0004-cloudevents-catalogue), [ADR 0010](/docs/adr/0010-door-reassigned-is-an-integration-event).
+Source: `apis/asyncapi.yaml`, `internal/adapters/outbound/kafka/encoder.go` (`routeOf`, the ADR 0004 catalogue), `internal/adapters/kafka/cloudevents/cloudevents.go`, `internal/adapters/inbound/kafka/*_consumer.go`, [ADR 0004](/docs/adr/0004-cloudevents-catalogue), [ADR 0010](/docs/adr/0010-door-reassigned-is-an-integration-event), [ADR 0012](/docs/adr/0012-carrier-registry).
 
 ## Envelope and delivery
 
@@ -18,8 +18,8 @@ Source: `apis/asyncapi.yaml`, `internal/adapters/outbound/kafka/encoder.go` (`ro
 | `specversion` | `1.0` |
 | `id` | UUID minted once when the fact is written to the outbox; a relay retry republishes the same id. Consumers dedupe on it. |
 | `source` | `/warehouse/dock-scheduling` |
-| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment` or `dockcalendar` |
-| `subject` and Kafka key | the appointment id (`appt-<uuid>`), or the site id for calendar events: one appointment's history stays on one partition |
+| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment`, `dockcalendar` or `carrier` |
+| `subject` and Kafka key | the appointment id (`appt-<uuid>`), the site id for calendar events, or the SCAC for carrier events: one appointment's (or carrier's) history stays on one partition |
 | `time` | the fact's occurred-at, UTC |
 | `datacontenttype` | `application/json`; Kafka `content-type` header `application/cloudevents+json; charset=UTF-8` |
 | `dataschema` | `urn:warehouse:dock-scheduling:<stream>:<EventName>:v1`, stream `events` or `analytics` |
@@ -49,6 +49,16 @@ Topics: `warehouse.dock-scheduling.events` (integration events; contract for oth
 | `DoorClosureScheduled` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `from`, `to`, `reason`, `version` | `ScheduleDoorClosure` | `yard-management` |
 | `DoorClosureLifted` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `version` | `LiftDoorClosure` | `yard-management` |
 | `DoorOperatingHoursDeclared` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared` | analytics only | `site_id`, `door_code`, `operating_hours`, `version` | `DeclareOperatingHours` | analytics only |
+
+### Carrier events (key `scac`, ADR 0012)
+
+| Event | Full `type` | Stream | `data` fields | Producing command | Consumers |
+| --- | --- | --- | --- | --- | --- |
+| `CarrierRegistered` | `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered` | integration + analytics twin | `scac`, `name`, `usdot`, `mc`, `status`, `reason`, `suspended_at`, `version` (the full snapshot) | `RegisterCarrier` (first registration), `UpdateCarrier` | none yet (`yard-management` planned) |
+| `CarrierSuspended` | `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended` | integration + analytics twin | `scac`, `reason`, `suspended_at`, `version` | `SuspendCarrier` | none yet (`yard-management` planned) |
+| `CarrierReinstated` | `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated` | integration + analytics twin | `scac`, `reinstated_at`, `version` | `ReinstateCarrier` | none yet (`yard-management` planned) |
+
+A carrier fact raised by an MCP write also carries an optional `initiated_by` object in `data` (`via`, `proposal_id`, `approved_by`, `agent_id`); a REST write carries none.
 
 Stream: `integration + analytics twin` is `warehouse.dock-scheduling.events` plus the same message on
 `warehouse.dock-scheduling.analytics`; `analytics only` is the analytics topic alone.

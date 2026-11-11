@@ -125,6 +125,12 @@ type writeOut struct {
 	Replayed bool `json:"replayed"`
 }
 
+func (o *writeOut) attribute(by initiatedByOut) { o.InitiatedBy = by }
+func (o *writeOut) markReplayed(r bool)         { o.Replayed = r }
+func (o *writeOut) logFields() []any {
+	return []any{"appointment_id", o.Appointment.AppointmentID, "state", o.Appointment.State}
+}
+
 func orNil(s string) *string {
 	if s == "" {
 		return nil

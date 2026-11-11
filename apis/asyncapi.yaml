@@ -12,14 +12,15 @@ info:
   description: |
     Event catalog for the **dock-scheduling** bounded context (WMS subdomain): the door calendar of every site (ADR 0001, ADR 0002).
 
-    **Published.** The `DockAppointment` aggregate raises eight events and the `DockCalendar` aggregate three. Seven of the eleven
-    go to `warehouse.dock-scheduling.events` (`DockAppointmentDoorReassigned` since ADR 0010); the analytics-only facts
+    **Published.** The `DockAppointment` aggregate raises eight events, the `DockCalendar` aggregate three and the `Carrier` aggregate
+    (the carrier registry, ADR 0012) three. Ten of the fourteen go to `warehouse.dock-scheduling.events` (`DockAppointmentDoorReassigned`
+    since ADR 0010, `CarrierRegistered`, `CarrierSuspended` and `CarrierReinstated` since ADR 0012); the analytics-only facts
     (`DockAppointmentCheckedIn`, `DockAppointmentCompleted`, `DockAppointmentAtRisk`, `DoorOperatingHoursDeclared`) go ONLY to
     `warehouse.dock-scheduling.analytics`, where every published fact also appears as its analytics twin.
     Every fact is written to its stream through a **transactional outbox**: the aggregate row and its already-encoded events commit in
     ONE database transaction and a relay drains them to Kafka (at-least-once; the CloudEvents `id` is stored with the outbox row, so a
-    retry republishes the same `id`). Kafka key = appointment id (site id for the calendar events), so one appointment's history stays
-    ordered on one partition.
+    retry republishes the same `id`). Kafka key = appointment id (site id for the calendar events, SCAC for the carrier events), so one
+    appointment's (or carrier's) history stays ordered on one partition.
 
     **Consumed (ADR 0003).** facility-layout (`ZoneRegistered`, `LocationSlotRegistered`, `LocationSlotDecommissioned`),
     inbound-receiving (`ASNRegistered`, `ASNCancelled`),
@@ -29,7 +30,7 @@ info:
     **Envelope (mandatory).** CloudEvents 1.0, structured content mode, Kafka header `content-type: application/cloudevents+json;
     charset=UTF-8`. `specversion`, `id`, `source` (`/warehouse/dock-scheduling`), `type`, `subject`, `time`, `datacontenttype`
     (`application/json`) and `dataschema` (`urn:warehouse:dock-scheduling:events:<EventName>:v1`) are all required. Type =
-    `com.warehouse.wms.dock-scheduling.<entity>.<EventName>` with entity `dockappointment` or `dockcalendar`. A breaking payload
+    `com.warehouse.wms.dock-scheduling.<entity>.<EventName>` with entity `dockappointment`, `dockcalendar` or `carrier`. A breaking payload
     change is a new `.v2` type, never a mutation.
 
 servers:
@@ -58,17 +59,20 @@ tags:
 channels:
   warehouse.dock-scheduling.events:
     description: |
-      This service's integration topic. Written by the outbox relay; key = appointment id (site id for the door calendar events);
+      This service's integration topic. Written by the outbox relay; key = appointment id (site id for the door calendar events, SCAC for the carrier events);
       the only Kafka header on every message is the CloudEvents `content-type`. Rows the relay can never encode are parked raw on
       `warehouse.dock-scheduling.events.dlq`. Dispatch on the full `type`, ignore unknown types, dedupe on `id`.
     subscribe:
       operationId: receiveDockSchedulingEvents
       summary: Receive the appointment lifecycle and door closures.
       description: |
-        Route on the full `type` (`com.warehouse.wms.dock-scheduling.dockappointment.<EventName>` and
-        `com.warehouse.wms.dock-scheduling.dockcalendar.<EventName>`). `DockAppointmentBooked` and `DockAppointmentRescheduled` carry the
+        Route on the full `type` (`com.warehouse.wms.dock-scheduling.dockappointment.<EventName>`,
+        `com.warehouse.wms.dock-scheduling.dockcalendar.<EventName>` and `com.warehouse.wms.dock-scheduling.carrier.<EventName>`). `DockAppointmentBooked` and `DockAppointmentRescheduled` carry the
         site's arrival tolerance; `DockAppointmentCancelled` carries the reason; `DockAppointmentNoShow` is terminal;
         `DockAppointmentDoorReassigned` moves the appointment to the door the trailer actually docked at, window unchanged (ADR 0010).
+        `CarrierRegistered` is the whole carrier snapshot after a registration or an update (the latest `version` wins, an older one is
+        stale); `CarrierSuspended` and `CarrierReinstated` change the carrier's status (ADR 0012). Suspending a carrier cancels nothing:
+        the appointments it holds stay and a person decides.
       tags:
         - name: dockappointment
       message:
@@ -80,6 +84,9 @@ channels:
           - $ref: "#/components/messages/DockAppointmentDoorReassigned"
           - $ref: "#/components/messages/DoorClosureScheduled"
           - $ref: "#/components/messages/DoorClosureLifted"
+          - $ref: "#/components/messages/CarrierRegistered"
+          - $ref: "#/components/messages/CarrierSuspended"
+          - $ref: "#/components/messages/CarrierReinstated"
 
   warehouse.dock-scheduling.analytics:
     description: |
@@ -111,6 +118,9 @@ channels:
           - $ref: "#/components/messages/DoorClosureScheduledAnalytics"
           - $ref: "#/components/messages/DoorClosureLiftedAnalytics"
           - $ref: "#/components/messages/DoorOperatingHoursDeclaredAnalytics"
+          - $ref: "#/components/messages/CarrierRegisteredAnalytics"
+          - $ref: "#/components/messages/CarrierSuspendedAnalytics"
+          - $ref: "#/components/messages/CarrierReinstatedAnalytics"
 
   warehouse.facility.events:
     description: |
@@ -438,6 +448,96 @@ components:
         - name: doorOperatingHoursDeclared
           summary: "The site's operating-hours rows were replaced."
           payload: {"specversion": "1.0", "id": "00001010-1111-4222-8333-444455556666", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared", "subject": "WH1", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:DoorOperatingHoursDeclared:v1", "data": {"site_id": "WH1", "door_code": null, "operating_hours": [{"door_code": null, "weekday": "MON", "opens_at": "06:00", "closes_at": "22:00", "timezone": "America/Sao_Paulo"}], "version": 2}}
+    CarrierRegistered:
+      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
+      name: CarrierRegistered
+      title: "CarrierRegistered"
+      summary: "A carrier was registered or its data was updated."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
+      contentType: application/cloudevents+json
+      tags:
+        - name: carrier
+      payload:
+        $ref: "#/components/schemas/CarrierRegisteredCloudEvent"
+      examples:
+        - name: carrierRegistered
+          summary: "A carrier was registered or its data was updated."
+          payload: {"specversion": "1.0", "id": "7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered", "subject": "ACMF", "time": "2026-11-10T14:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:CarrierRegistered:v1", "data": {"scac": "ACMF", "name": "ACME Freight", "usdot": "1234567", "mc": "MC654321", "status": "ACTIVE", "reason": null, "suspended_at": null, "version": 1}}
+    CarrierSuspended:
+      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
+      name: CarrierSuspended
+      title: "CarrierSuspended"
+      summary: "A carrier was suspended; it can no longer book."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
+      contentType: application/cloudevents+json
+      tags:
+        - name: carrier
+      payload:
+        $ref: "#/components/schemas/CarrierSuspendedCloudEvent"
+      examples:
+        - name: carrierSuspended
+          summary: "A carrier was suspended; it can no longer book."
+          payload: {"specversion": "1.0", "id": "b8a79685-7463-4e52-8d41-30f2e1d0c9ba", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended", "subject": "ACMF", "time": "2026-11-10T15:30:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:CarrierSuspended:v1", "data": {"scac": "ACMF", "reason": "insurance lapsed", "suspended_at": "2026-11-10T15:30:00Z", "version": 2}}
+    CarrierReinstated:
+      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
+      name: CarrierReinstated
+      title: "CarrierReinstated"
+      summary: "A suspended carrier was reinstated; it can book again."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). `scac`, `reinstated_at`, `version`."
+      contentType: application/cloudevents+json
+      tags:
+        - name: carrier
+      payload:
+        $ref: "#/components/schemas/CarrierReinstatedCloudEvent"
+      examples:
+        - name: carrierReinstated
+          summary: "A suspended carrier was reinstated; it can book again."
+          payload: {"specversion": "1.0", "id": "e9f8a7b6-c5d4-4e3f-a2b1-0c9d8e7f6a5b", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated", "subject": "ACMF", "time": "2026-11-11T09:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:CarrierReinstated:v1", "data": {"scac": "ACMF", "reinstated_at": "2026-11-11T09:00:00Z", "version": 3}}
+    CarrierRegisteredAnalytics:
+      x-no-consumer-reason: "analytics twin: consumed by this service's own projector only"
+      name: CarrierRegistered
+      title: "CarrierRegistered"
+      summary: "A carrier was registered or its data was updated."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
+      contentType: application/cloudevents+json
+      tags:
+        - name: analytics
+      payload:
+        $ref: "#/components/schemas/CarrierRegisteredAnalyticsCloudEvent"
+      examples:
+        - name: carrierRegistered
+          summary: "A carrier was registered or its data was updated."
+          payload: {"specversion": "1.0", "id": "7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered", "subject": "ACMF", "time": "2026-11-10T14:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierRegistered:v1", "data": {"scac": "ACMF", "name": "ACME Freight", "usdot": "1234567", "mc": "MC654321", "status": "ACTIVE", "reason": null, "suspended_at": null, "version": 1}}
+    CarrierSuspendedAnalytics:
+      x-no-consumer-reason: "analytics twin: consumed by this service's own projector only"
+      name: CarrierSuspended
+      title: "CarrierSuspended"
+      summary: "A carrier was suspended; it can no longer book."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
+      contentType: application/cloudevents+json
+      tags:
+        - name: analytics
+      payload:
+        $ref: "#/components/schemas/CarrierSuspendedAnalyticsCloudEvent"
+      examples:
+        - name: carrierSuspended
+          summary: "A carrier was suspended; it can no longer book."
+          payload: {"specversion": "1.0", "id": "b8a79685-7463-4e52-8d41-30f2e1d0c9ba", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended", "subject": "ACMF", "time": "2026-11-10T15:30:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierSuspended:v1", "data": {"scac": "ACMF", "reason": "insurance lapsed", "suspended_at": "2026-11-10T15:30:00Z", "version": 2}}
+    CarrierReinstatedAnalytics:
+      x-no-consumer-reason: "analytics twin: consumed by this service's own projector only"
+      name: CarrierReinstated
+      title: "CarrierReinstated"
+      summary: "A suspended carrier was reinstated; it can book again."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). `scac`, `reinstated_at`, `version`."
+      contentType: application/cloudevents+json
+      tags:
+        - name: analytics
+      payload:
+        $ref: "#/components/schemas/CarrierReinstatedAnalyticsCloudEvent"
+      examples:
+        - name: carrierReinstated
+          summary: "A suspended carrier was reinstated; it can book again."
+          payload: {"specversion": "1.0", "id": "e9f8a7b6-c5d4-4e3f-a2b1-0c9d8e7f6a5b", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated", "subject": "ACMF", "time": "2026-11-11T09:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierReinstated:v1", "data": {"scac": "ACMF", "reinstated_at": "2026-11-11T09:00:00Z", "version": 3}}
     ZoneRegistered:
       name: ZoneRegistered
       title: "ZoneRegistered (from facility-layout)"
@@ -624,6 +724,15 @@ components:
     DoorClosureLiftedData: {"type": "object", "required": ["site_id", "closure_id", "door_code", "version"], "properties": {"site_id": {"type": "string"}, "closure_id": {"type": "string"}, "door_code": {"type": "string"}, "version": {"type": "integer"}}}
     DoorOperatingHoursDeclaredAnalyticsCloudEvent: {"title": "CloudEvent + DoorOperatingHoursDeclared data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:DoorOperatingHoursDeclared:v1"]}, "data": {"$ref": "#/components/schemas/DoorOperatingHoursDeclaredData"}}}]}
     DoorOperatingHoursDeclaredData: {"type": "object", "required": ["site_id", "door_code", "operating_hours", "version"], "properties": {"site_id": {"type": "string"}, "door_code": {"type": "string", "nullable": true}, "operating_hours": {"type": "array", "items": {"type": "object", "required": ["weekday", "opens_at", "closes_at", "timezone"], "properties": {"door_code": {"type": "string", "nullable": true}, "weekday": {"type": "string", "enum": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]}, "opens_at": {"type": "string"}, "closes_at": {"type": "string"}, "timezone": {"type": "string"}}}}, "version": {"type": "integer"}}}
+    CarrierRegisteredCloudEvent: {"title": "CloudEvent + CarrierRegistered data (events stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:events:CarrierRegistered:v1"]}, "data": {"$ref": "#/components/schemas/CarrierRegisteredData"}}}]}
+    CarrierRegisteredAnalyticsCloudEvent: {"title": "CloudEvent + CarrierRegistered data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:CarrierRegistered:v1"]}, "data": {"$ref": "#/components/schemas/CarrierRegisteredData"}}}]}
+    CarrierRegisteredData: {"type": "object", "required": ["scac", "name", "usdot", "mc", "status", "reason", "suspended_at", "version"], "properties": {"scac": {"type": "string", "pattern": "^[A-Z]{2,4}$"}, "name": {"type": "string"}, "usdot": {"type": "string", "nullable": true}, "mc": {"type": "string", "nullable": true}, "status": {"type": "string", "enum": ["ACTIVE", "SUSPENDED"]}, "reason": {"type": "string", "nullable": true}, "suspended_at": {"type": "string", "format": "date-time", "nullable": true}, "version": {"type": "integer"}, "initiated_by": {"type": "object", "description": "Present only when an agent made the change through MCP (ADR 0012); REST writes carry none.", "required": ["via"], "properties": {"via": {"type": "string", "enum": ["mcp"]}, "proposal_id": {"type": "string"}, "approved_by": {"type": "string"}, "agent_id": {"type": "string"}}}}}
+    CarrierSuspendedCloudEvent: {"title": "CloudEvent + CarrierSuspended data (events stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:events:CarrierSuspended:v1"]}, "data": {"$ref": "#/components/schemas/CarrierSuspendedData"}}}]}
+    CarrierSuspendedAnalyticsCloudEvent: {"title": "CloudEvent + CarrierSuspended data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:CarrierSuspended:v1"]}, "data": {"$ref": "#/components/schemas/CarrierSuspendedData"}}}]}
+    CarrierSuspendedData: {"type": "object", "required": ["scac", "reason", "suspended_at", "version"], "properties": {"scac": {"type": "string", "pattern": "^[A-Z]{2,4}$"}, "reason": {"type": "string", "nullable": false}, "suspended_at": {"type": "string", "format": "date-time", "nullable": false}, "version": {"type": "integer"}, "initiated_by": {"type": "object", "description": "Present only when an agent made the change through MCP (ADR 0012); REST writes carry none.", "required": ["via"], "properties": {"via": {"type": "string", "enum": ["mcp"]}, "proposal_id": {"type": "string"}, "approved_by": {"type": "string"}, "agent_id": {"type": "string"}}}}}
+    CarrierReinstatedCloudEvent: {"title": "CloudEvent + CarrierReinstated data (events stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:events:CarrierReinstated:v1"]}, "data": {"$ref": "#/components/schemas/CarrierReinstatedData"}}}]}
+    CarrierReinstatedAnalyticsCloudEvent: {"title": "CloudEvent + CarrierReinstated data (analytics stream)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/dock-scheduling"]}, "type": {"enum": ["com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated"]}, "dataschema": {"enum": ["urn:warehouse:dock-scheduling:analytics:CarrierReinstated:v1"]}, "data": {"$ref": "#/components/schemas/CarrierReinstatedData"}}}]}
+    CarrierReinstatedData: {"type": "object", "required": ["scac", "reinstated_at", "version"], "properties": {"scac": {"type": "string", "pattern": "^[A-Z]{2,4}$"}, "reinstated_at": {"type": "string", "format": "date-time"}, "version": {"type": "integer"}, "initiated_by": {"type": "object", "description": "Present only when an agent made the change through MCP (ADR 0012); REST writes carry none.", "required": ["via"], "properties": {"via": {"type": "string", "enum": ["mcp"]}, "proposal_id": {"type": "string"}, "approved_by": {"type": "string"}, "agent_id": {"type": "string"}}}}}
     ConsumedZoneRegisteredCloudEvent: {"title": "CloudEvent + ZoneRegistered data (consumed)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/facility-layout"]}, "type": {"enum": ["com.warehouse.wms.facility-layout.zone.ZoneRegistered"]}, "dataschema": {"enum": ["urn:warehouse:facility-layout:events:ZoneRegistered:v1"]}, "data": {"$ref": "#/components/schemas/ConsumedZoneRegisteredData"}}}]}
     ConsumedZoneRegisteredData: {"type": "object", "required": ["zoneId", "siteCode"], "properties": {"zoneId": {"type": "string"}, "siteCode": {"type": "string"}}}
     ConsumedLocationSlotRegisteredCloudEvent: {"title": "CloudEvent + LocationSlotRegistered data (consumed)", "allOf": [{"$ref": "#/components/schemas/CloudEventEnvelope"}, {"type": "object", "properties": {"source": {"enum": ["/warehouse/facility-layout"]}, "type": {"enum": ["com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered"]}, "dataschema": {"enum": ["urn:warehouse:facility-layout:events:LocationSlotRegistered:v1"]}, "data": {"$ref": "#/components/schemas/ConsumedLocationSlotRegisteredData"}}}]}

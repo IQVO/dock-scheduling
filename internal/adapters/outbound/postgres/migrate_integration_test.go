@@ -20,7 +20,7 @@ import (
 
 var allTables = []string{
 	"dock_appointments", "asn_claims", "dock_calendars", "calendar_operating_hours", "calendar_closures",
-	"zones", "doors", "asns", "cutoff_schedules", "cutoffs", "processed_events", "outbox", "idempotency_keys",
+	"zones", "doors", "asns", "cutoff_schedules", "cutoffs", "processed_events", "outbox", "idempotency_keys", "carriers",
 }
 
 func connect(t *testing.T, url string) (*pgx.Conn, context.Context) {
@@ -59,8 +59,8 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 		}
 	}
 	var version int
-	if err := conn.QueryRow(ctx, `SELECT version FROM schema_migrations`).Scan(&version); err != nil || version != 2 {
-		t.Fatalf("schema_migrations version = %d %v, want 2", version, err)
+	if err := conn.QueryRow(ctx, `SELECT version FROM schema_migrations`).Scan(&version); err != nil || version != 3 {
+		t.Fatalf("schema_migrations version = %d %v, want 3", version, err)
 	}
 }
 

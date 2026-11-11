@@ -244,7 +244,7 @@ func newWorld(t *testing.T) *world {
 	s := memory.NewStore()
 	w := &world{t: t, store: s, metrics: &memory.Metrics{}, ids: &fixedIDs{}, clock: &fixedClock{now: testNow}, ft: &fakeTransport{}}
 	w.svc = usecases.New(usecases.Deps{
-		Appointments: s.Appointments(), Calendars: s.Calendars(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
+		Appointments: s.Appointments(), Calendars: s.Calendars(), Carriers: s.Carriers(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
 		Processed: s, Events: s, Metrics: w.metrics, IDs: w.ids, Clock: w.clock, UoW: s,
 	})
 	w.tr = w.ft.transport()

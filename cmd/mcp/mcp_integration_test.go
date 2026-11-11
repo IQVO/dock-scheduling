@@ -219,13 +219,14 @@ func TestMCP_RealPostgres(t *testing.T) {
 
 	t.Run("probes answer and the MCP endpoint is on both paths", j.probes)
 	t.Run("the stateless 2026-07-28 handshake is served and no session is issued", j.stateless)
-	t.Run("tools/list carries nine tools, each with an authority level", j.tools)
+	t.Run("tools/list carries fourteen tools, each with an authority level", j.tools)
 	t.Run("a booking writes the aggregate, the outbox rows and the idempotency key", j.book)
 	t.Run("the same key replays the stored answer and writes nothing", j.replay)
 	t.Run("the same key with other arguments is refused", j.keyReused)
 	t.Run("a domain refusal over Postgres is a typed tool error and writes nothing", j.overlap)
 	t.Run("reads see the booking", j.reads)
 	t.Run("report_eta, a stale expectedVersion and reschedule", j.etaAndReschedule)
+	t.Run("the carrier registry over Postgres: register, suspend refuses a booking, reinstate", j.carriers)
 	t.Run("cancel closes the appointment and enqueues the fact", j.cancel)
 	t.Run("run returns nil within a bound once the context is cancelled", j.shutdown)
 }
@@ -297,6 +298,7 @@ func (j *journey) tools(t *testing.T) {
 		"list_appointments": "L1", "get_appointment": "L1", "get_door_availability": "L1", "get_dock_calendar": "L1",
 		"list_at_risk_appointments": "L1",
 		"book_appointment":          "L3", "reschedule_appointment": "L3", "cancel_appointment": "L3", "report_eta": "L3",
+		"list_carriers": "L1", "get_carrier": "L1", "register_carrier": "L3", "suspend_carrier": "L3", "reinstate_carrier": "L3", // ADR 0012
 	}
 	got := map[string]string{}
 	for tool, err := range j.session.Tools(context.Background(), nil) {
@@ -412,6 +414,34 @@ func (j *journey) etaAndReschedule(t *testing.T) {
 	}
 	if n := count(t, j.databaseURL, `SELECT count(*) FROM outbox WHERE aggreg_id = $1 AND payload->>'event' = 'DockAppointmentRescheduled'`, j.apptID); n != 1 {
 		t.Errorf("DockAppointmentRescheduled outbox rows = %d, want 1", n)
+	}
+}
+
+// carriers drives the carrier registry (ADR 0012) through the MCP tools over
+// real Postgres: the carrier row, its outbox facts with the agent's
+// attribution, and the booking rule (a SUSPENDED registered SCAC is refused,
+// an ACTIVE one is accepted again once reinstated).
+func (j *journey) carriers(t *testing.T) {
+	reg := j.ok(t, "register_carrier", map[string]any{"scac": "ACMF", "name": "ACME Freight", "usdot": "1234567", "mc": "654321", "idempotencyKey": "it-carrier-1", "agentId": "ops-agent"})
+	if c, _ := reg["carrier"].(map[string]any); reg["created"] != true || c["status"] != "ACTIVE" || c["mc"] != "MC654321" {
+		t.Fatalf("register_carrier = %v", reg)
+	}
+	if n := count(t, j.databaseURL, `SELECT count(*) FROM carriers WHERE scac = 'ACMF' AND status = 'ACTIVE' AND version = 1 AND mc = 'MC654321'`); n != 1 {
+		t.Fatalf("carriers rows = %d, want 1", n)
+	}
+	j.ok(t, "suspend_carrier", map[string]any{"scac": "ACMF", "reason": "insurance lapsed", "expectedVersion": 1, "idempotencyKey": "it-carrier-2", "agentId": "ops-agent"})
+	j.refused(t, "carrier-suspended", "book_appointment", j.bookArgs("it-book-suspended", map[string]any{"asnNumbers": []string{asn2}}))
+	if n := count(t, j.databaseURL, `SELECT count(*) FROM dock_appointments`); n != 1 {
+		t.Errorf("dock_appointments rows after the refused booking = %d, want 1", n)
+	}
+	j.ok(t, "reinstate_carrier", map[string]any{"scac": "ACMF", "idempotencyKey": "it-carrier-3", "agentId": "ops-agent"})
+	if n := count(t, j.databaseURL, `SELECT count(*) FROM carriers WHERE scac = 'ACMF' AND status = 'ACTIVE' AND version = 3 AND suspension_reason = ''`); n != 1 {
+		t.Errorf("reinstated carriers rows = %d, want 1", n)
+	}
+	for _, event := range []string{"CarrierRegistered", "CarrierSuspended", "CarrierReinstated"} {
+		if n := count(t, j.databaseURL, `SELECT count(*) FROM outbox WHERE aggreg_id = 'ACMF' AND payload->>'event' = $1 AND payload->'data'->'initiated_by'->>'agent_id' = 'ops-agent'`, event); n != 1 {
+			t.Errorf("%s outbox rows attributed to the agent = %d, want 1", event, n)
+		}
 	}
 }
 

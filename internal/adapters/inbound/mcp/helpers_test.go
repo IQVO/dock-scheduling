@@ -73,6 +73,21 @@ func (r *recordingService) ReportEta(ctx context.Context, cmd usecases.EtaComman
 	return r.Service.ReportEta(ctx, cmd)
 }
 
+func (r *recordingService) RegisterCarrier(ctx context.Context, cmd usecases.RegisterCarrierCommand) (views.CarrierResult, error) {
+	r.initiators = append(r.initiators, usecases.InitiatorFrom(ctx))
+	return r.Service.RegisterCarrier(ctx, cmd)
+}
+
+func (r *recordingService) SuspendCarrier(ctx context.Context, cmd usecases.SuspendCarrierCommand) (views.CarrierView, error) {
+	r.initiators = append(r.initiators, usecases.InitiatorFrom(ctx))
+	return r.Service.SuspendCarrier(ctx, cmd)
+}
+
+func (r *recordingService) ReinstateCarrier(ctx context.Context, cmd usecases.ReinstateCarrierCommand) (views.CarrierView, error) {
+	r.initiators = append(r.initiators, usecases.InitiatorFrom(ctx))
+	return r.Service.ReinstateCarrier(ctx, cmd)
+}
+
 // harness is a connected in-memory MCP client over the real server wired to the
 // real use cases over the in-memory store, exactly as cmd/mcp wires them
 // (minus Postgres; cmd/mcp's integration test runs the Postgres shape).
@@ -87,7 +102,7 @@ type harness struct {
 
 func newDeps(store *memory.Store, clock *fixedClock) (*recordingService, inboundmcp.Deps) {
 	svc := &recordingService{Service: usecases.New(usecases.Deps{
-		Appointments: store.Appointments(), Calendars: store.Calendars(), Doors: store.Doors(), Asns: store.Asns(), Cutoffs: store.Cutoffs(),
+		Appointments: store.Appointments(), Calendars: store.Calendars(), Carriers: store.Carriers(), Doors: store.Doors(), Asns: store.Asns(), Cutoffs: store.Cutoffs(),
 		Processed: store, Events: store, Metrics: &memory.Metrics{}, IDs: &seqIDs{}, Clock: clock, UoW: store,
 	})}
 	return svc, inboundmcp.Deps{

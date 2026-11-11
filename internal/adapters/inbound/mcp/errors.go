@@ -7,6 +7,7 @@ import (
 
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -40,6 +41,7 @@ var errorCatalogue = []struct {
 
 	{ports.ErrNotFound, "appointment-not-found"},
 	{usecases.ErrDoorNotFound, "door-not-found"},
+	{carrier.ErrCarrierNotFound, "carrier-not-found"},
 	{usecases.ErrPreconditionFailed, "precondition-failed"},
 
 	// 409 on REST: conflicts and illegal states.
@@ -48,6 +50,10 @@ var errorCatalogue = []struct {
 	{dockappointment.ErrAsnAlreadyScheduled, "asn-already-scheduled"},
 	{dockappointment.ErrIllegalTransition, "illegal-transition"},
 	{dockappointment.ErrConcurrentUpdate, "concurrent-update"},
+	{carrier.ErrCarrierSuspended, "carrier-suspended"},
+	{carrier.ErrCarrierAlreadyRegistered, "carrier-already-registered"},
+	{carrier.ErrCarrierAlreadySuspended, "carrier-already-suspended"},
+	{carrier.ErrCarrierNotSuspended, "carrier-not-suspended"},
 
 	// 422 on REST: value-object and reference rules.
 	{shared.ErrInvalidDoorCode, "invalid-door-code"},
@@ -65,6 +71,11 @@ var errorCatalogue = []struct {
 	{dockappointment.ErrInvalidRefs, "invalid-refs"},
 	{dockappointment.ErrInvalidReason, "invalid-reason"},
 	{dockappointment.ErrInvalidEta, "invalid-eta"},
+	{carrier.ErrInvalidScac, "invalid-scac"},
+	{carrier.ErrInvalidUSDOT, "invalid-usdot"},
+	{carrier.ErrInvalidMC, "invalid-mc"},
+	{carrier.ErrInvalidCarrierName, "invalid-carrier-name"},
+	{carrier.ErrInvalidSuspensionReason, "invalid-suspension-reason"},
 }
 
 // slugFor returns the slug of err; ok is false for an untyped error.
