@@ -60,7 +60,7 @@ export CPT_CONSUMER_GROUP=dock-scheduling-cpt
 go run ./cmd/api
 ```
 
-It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is built on develop and registered in `warehouse-infra` develop, but not yet applied to the cluster (no pod runs yet).
+It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is applied to the k3s cluster at `v0.1.2` (api only; read-only check on 2026-11-10, see [What runs on the k3s cluster](/docs/operations/runbook#what-runs-on-the-k3s-cluster)): in the cluster MCP, the dedicated relay, the analytics binaries and the sweep CronJob are switched off in `warehouse-infra`.
 
 ## First calls
 

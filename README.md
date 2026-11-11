@@ -6,7 +6,7 @@ Dock Scheduling (WMS-tier Supporting bounded context of the yard domain): Owns t
 
 This project is a domain-driven design study. It is not associated with, endorsed by or affiliated with any company, and it uses no company's code, data, logos or trademarks. All names, figures and examples are illustrative or synthetic.
 
-Status: built on develop, registered in warehouse-infra develop (`terraform/apps.yaml` entry, helm values, dashboard and alert rules, image pinned at v0.1.1), not applied to the k3s cluster (no pod runs yet). The design lives in the yard instance of
+Status: built on develop, registered in warehouse-infra develop (`terraform/apps.yaml` entry, helm values, dashboard and alert rules, image pinned at v0.1.2) and applied to the k3s cluster: read-only on 2026-11-10 the Argo CD application is Synced and Healthy and the `api` pod runs `v0.1.2` (api only: MCP, dedicated relay, analytics and the no-show sweep are switched off in infra; see the [runbook](https://iqvo.github.io/dock-scheduling/docs/operations/runbook#what-runs-on-the-k3s-cluster)). The design lives in the yard instance of
 [warehouse-docs](https://iqvo.github.io/warehouse-docs/yard/contexts/dock-scheduling/); `yard/model/model.yaml` there is the single source of truth.
 
 Runtime: Go, hexagonal, real PostgreSQL and Kafka only (`DATABASE_URL`, `KAFKA_BROKERS` are mandatory), CloudEvents 1.0 on every message
