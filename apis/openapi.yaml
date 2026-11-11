@@ -655,7 +655,7 @@ paths:
       operationId: updateCarrier
       summary: Update a registered carrier
       description: |
-        A JSON merge patch of `name`, `usdot` and `mc` (UpdateCarrier): an absent field is kept, `null` or `""` clears an optional identifier
+        A JSON merge patch of `name`, `usdot` and `mc` (UpdateCarrier): an absent field is kept, `null` or an empty string clears an optional identifier
         (`name` cannot be cleared). The status is not patchable: use the suspension routes. A patch that changes nothing is `200` and
         publishes nothing. Requires an `Idempotency-Key`; `If-Match` with the `ETag` is honoured (412 on mismatch). Publishes
         `CarrierRegistered` with the new snapshot and version.
@@ -1594,8 +1594,8 @@ components:
       description: A JSON merge patch; at least the fields to change.
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
-        usdot: { type: string, nullable: true, description: "1..8 digits; null or an empty string clears it." }
-        mc: { type: string, nullable: true, description: "MC or MX number; null or an empty string clears it." }
+        usdot: { type: string, nullable: true, description: 1..8 digits; null or an empty string clears it. }
+        mc: { type: string, nullable: true, description: MC or MX number; null or an empty string clears it. }
     SuspendCarrierRequest:
       type: object
       required: [reason]
