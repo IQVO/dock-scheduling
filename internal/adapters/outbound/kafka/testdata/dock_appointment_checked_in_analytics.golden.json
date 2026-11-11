@@ -14,6 +14,8 @@
     "checked_in_at": "2026-11-06T07:55:00Z",
     "arrival_status": "ON_TIME",
     "visit_id": "visit-0b5c1f2e-7a9d-4c31-8e64-5d2f9a7b3c10",
-    "version": 2
+    "version": 2,
+    "x12_status": "X1",
+    "cbv_biz_step": "urn:epcglobal:cbv:bizstep:arriving"
   }
 }

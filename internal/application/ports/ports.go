@@ -91,8 +91,11 @@ type DoorView interface {
 	Door(ctx context.Context, code shared.DoorCode) (*dockappointment.Door, error)
 	// UpsertZone records zoneId -> siteCode.
 	UpsertZone(ctx context.Context, zoneID, siteCode string) error
-	// UpsertDoor records a Dock slot; RemoveDoor deletes a slot of any role.
-	UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow) error
+	// UpsertDoor records a Dock slot with its optional GS1 GLN ("" = none);
+	// a re-registration that carries no GLN keeps the one already known
+	// (facility-layout sets it at registration only, ADR 0013). RemoveDoor
+	// deletes a slot of any role.
+	UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow, gln string) error
 	// RemoveDoor deletes the door (a re-registration with another role or a decommission).
 	RemoveDoor(ctx context.Context, code string) error
 }

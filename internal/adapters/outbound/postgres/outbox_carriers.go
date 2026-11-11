@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/claudioed/dock-scheduling/internal/application/outbox"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
 	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 )
@@ -34,8 +35,8 @@ func carrierFactData(e carrier.Event, by *initiatedByData) (any, error) {
 	switch f := e.(type) {
 	case carrier.RegisteredEvent:
 		return carrierRegisteredData{
-			SCAC: f.SCAC(), Name: f.Name, USDOT: nullable(f.USDOT), MC: nullable(f.MC), Status: string(f.Status),
-			Reason: nullable(f.Reason), SuspendedAt: nullableTime(f.SuspendedAt), Version: f.CarrierVersion(), InitiatedBy: by,
+			SCAC: f.SCAC(), Name: f.Name, USDOT: outbox.Nullable(f.USDOT), MC: outbox.Nullable(f.MC), Status: string(f.Status),
+			Reason: outbox.Nullable(f.Reason), SuspendedAt: outbox.NullableTime(f.SuspendedAt), Version: f.CarrierVersion(), InitiatedBy: by,
 		}, nil
 	case carrier.SuspendedEvent:
 		return carrierSuspendedData{SCAC: f.SCAC(), Reason: f.Reason, SuspendedAt: f.SuspendedAt.UTC(), Version: f.CarrierVersion(), InitiatedBy: by}, nil

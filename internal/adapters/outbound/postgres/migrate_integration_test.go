@@ -59,8 +59,8 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 		}
 	}
 	var version int
-	if err := conn.QueryRow(ctx, `SELECT version FROM schema_migrations`).Scan(&version); err != nil || version != 3 {
-		t.Fatalf("schema_migrations version = %d %v, want 3", version, err)
+	if err := conn.QueryRow(ctx, `SELECT version FROM schema_migrations`).Scan(&version); err != nil || version != 4 {
+		t.Fatalf("schema_migrations version = %d %v, want 4", version, err)
 	}
 }
 
@@ -117,5 +117,53 @@ func TestMigrationsGoUpDownUp(t *testing.T) {
 		if !tableExists(t, conn, ctx, table) {
 			t.Fatalf("table %s missing after the second up", table)
 		}
+	}
+}
+
+// Migration 0004 (ADR 0013) is one nullable column: it is there after the
+// migration, it refuses a malformed GLN, and its down step removes exactly it,
+// leaving the doors table as 0003 had it.
+func TestMigration0004AddsTheDoorGLNAndGoesDownCleanly(t *testing.T) {
+	url := pgtest.EmptyURL(t)
+	if err := postgres.RunMigrations(url); err != nil {
+		t.Fatal(err)
+	}
+	conn, ctx := connect(t, url)
+	hasGLN := func() bool {
+		var n int
+		if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_name = 'doors' AND column_name = 'gln'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n == 1
+	}
+	if !hasGLN() {
+		t.Fatal("doors.gln is missing after the migration")
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO doors (door_code, zone_id, dock_flow, gln) VALUES ('D1', 'z', 'Both', '12345')`); err == nil {
+		t.Fatal("a GLN that is not 13 digits must be refused")
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO doors (door_code, zone_id, dock_flow, gln) VALUES ('D1', 'z', 'Both', '4006381333931')`); err != nil {
+		t.Fatalf("a 13-digit GLN: %v", err)
+	}
+	m, err := postgres.Migrator(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Steps(-1); err != nil {
+		t.Fatalf("down one step: %v", err)
+	}
+	_, _ = m.Close()
+	if hasGLN() {
+		t.Fatal("doors.gln survived its down migration")
+	}
+	var door string
+	if err := conn.QueryRow(ctx, `SELECT door_code FROM doors`).Scan(&door); err != nil || door != "D1" {
+		t.Fatalf("the down step must keep the door rows: %q %v", door, err)
+	}
+	if err := postgres.RunMigrations(url); err != nil {
+		t.Fatalf("up again after the down step: %v", err)
+	}
+	if !hasGLN() {
+		t.Fatal("doors.gln missing after the second up")
 	}
 }

@@ -16,26 +16,26 @@ func TestFacilityConsumers(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH3"))
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d == nil || d.Site != "WH3" || d.Flow != shared.FlowBoth {
 		t.Fatalf("door = %+v", d)
 	}
 	// a re-registration with another role removes the door
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Storage", ""))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Storage", "", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d != nil {
 		t.Fatalf("a non-dock slot is no door: %+v", d)
 	}
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Inbound"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Inbound", ""))
 	must(t, e.svc.ConsumeSlotDecommissioned(ctx, "s3", "D-NEW"))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d != nil {
 		t.Fatalf("decommissioned door still bookable: %+v", d)
 	}
-	if err := e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Sideways"); !errors.Is(err, shared.ErrInvalidDockFlow) {
+	if err := e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Sideways", ""); !errors.Is(err, shared.ErrInvalidDockFlow) {
 		t.Fatalf("bad dock flow: %v", err)
 	}
 	// a duplicate CloudEvents id is a no-op
 	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH-CHANGED"))
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s5", "D-NEW", "zone-new", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s5", "D-NEW", "zone-new", "Dock", "Both", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d == nil || d.Site != "WH3" {
 		t.Fatalf("the duplicate zone event must not apply: %+v", d)
 	}
@@ -44,7 +44,7 @@ func TestFacilityConsumers(t *testing.T) {
 func TestBookingForADoorWhoseZoneHasNotArrivedIsRefused(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-LATE", "zone-late", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-LATE", "zone-late", "Dock", "Both", ""))
 	if _, err := e.svc.BookAppointment(ctx, inboundCmd("D-LATE", at8, at10)); !errors.Is(err, dockappointment.ErrUnknownDoor) {
 		t.Fatalf("pending door: %v", err)
 	}
@@ -224,5 +224,43 @@ func TestAConsumerTransactionRollsBackItsClaim(t *testing.T) {
 	}
 	if first, _ := e.store.Claim(ctx, "evt-retry"); !first {
 		t.Fatal("the claim must roll back with the failed effect so a redelivery is processed")
+	}
+}
+
+// The optional GS1 GLN of a Dock slot (ADR 0013): kept with the door, dropped
+// when it is not a valid GLN (never an error), kept across a re-registration
+// that carries none, and gone with the door.
+func TestConsumeSlotRegisteredKeepsAValidGLNAndDropsAnInvalidOne(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	gln := func() shared.GLN {
+		t.Helper()
+		d, _ := e.store.Doors().Door(ctx, "D-NEW")
+		if d == nil {
+			t.Fatal("D-NEW is not a bookable door")
+		}
+		return d.GLN
+	}
+	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH3"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both", ""))
+	if gln() != "" {
+		t.Fatalf("a slot without a GLN has none, got %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Dock", "Both", "4006381333931"))
+	if gln() != "4006381333931" {
+		t.Fatalf("GLN = %q, want the registered one", gln())
+	}
+	// not a valid GLN (bad check digit): dropped, the known one stays, no error
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Both", "4006381333932"))
+	if gln() != "4006381333931" {
+		t.Fatalf("an invalid GLN must be ignored, GLN = %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s3", "D-NEW", "zone-new", "Dock", "Inbound", ""))
+	if gln() != "4006381333931" {
+		t.Fatalf("a re-registration without a GLN keeps the known one, got %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Inbound", "4012345000009"))
+	if gln() != "4012345000009" {
+		t.Fatalf("a new valid GLN replaces the old one, got %q", gln())
 	}
 }

@@ -117,8 +117,8 @@ func (w *itWorld) seedFacility() {
 		}
 	}
 	must(w.svc.ConsumeZoneRegistered(w.ctx, "seed-zone", "zone-dock-wh1", fixtureSite))
-	must(w.svc.ConsumeSlotRegistered(w.ctx, "seed-d01", fixtureDoor, "zone-dock-wh1", "Dock", "Both"))
-	must(w.svc.ConsumeSlotRegistered(w.ctx, "seed-d02", "WH1-DOCK-D02", "zone-dock-wh1", "Dock", "Inbound"))
+	must(w.svc.ConsumeSlotRegistered(w.ctx, "seed-d01", fixtureDoor, "zone-dock-wh1", "Dock", "Both", ""))
+	must(w.svc.ConsumeSlotRegistered(w.ctx, "seed-d02", "WH1-DOCK-D02", "zone-dock-wh1", "Dock", "Inbound", ""))
 	must(w.svc.ConsumeAsnRegistered(w.ctx, "seed-asn", fixtureASN, bookedStart))
 }
 

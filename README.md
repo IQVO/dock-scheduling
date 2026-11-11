@@ -36,7 +36,7 @@ The documentation site of this service is published at **https://iqvo.github.io/
 | [Events](https://iqvo.github.io/dock-scheduling/docs/api-reference/events) | The CloudEvents catalogue |
 | [MCP tools](https://iqvo.github.io/dock-scheduling/docs/mcp/tools) | Every MCP tool, resource and prompt |
 | [Integration](https://iqvo.github.io/dock-scheduling/docs/ecosystem/integration) | Upstreams, downstreams, absent edges |
-| [ADRs](https://iqvo.github.io/dock-scheduling/docs/adr) | The ten architecture decision records |
+| [ADRs](https://iqvo.github.io/dock-scheduling/docs/adr) | The thirteen architecture decision records |
 
 ## Binaries
 

@@ -116,9 +116,9 @@ func seed(t *testing.T, store *memory.Store) {
 	ctx := context.Background()
 	for _, err := range []error{
 		store.Doors().UpsertZone(ctx, "zone-dock", "WH1"),
-		store.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound),
-		store.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound),
-		store.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth),
+		store.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound, ""),
+		store.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound, ""),
+		store.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth, ""),
 		store.Asns().Register(ctx, "ASN-1", at8),
 		store.Asns().Register(ctx, "ASN-2", at8),
 		store.Asns().Register(ctx, "ASN-3", at8),

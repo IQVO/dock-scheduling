@@ -68,6 +68,16 @@ the warehouse-docs repository's strategic-design page on the CloudEvents
 event standard. It is recorded in this repo as ADR
 `docs/adr/0004-cloudevents-catalogue.md`.
 
+### Standard vocabulary (ADR 0013)
+
+Every appointment fact (and door closure) may carry the optional `x12_status` (ANSI X12 214 code), `cbv_biz_step` (GS1 CBV business
+step URN) and `read_point_gln` (GS1 GLN of the door). They come from ONE table, `internal/domain/standards` (event name + direction;
+only honest mappings, everything else NOT mapped with a reason), applied where the outbox row is built
+(`internal/application/outbox.AppointmentFactData`), so the integration and analytics payloads stay identical. A field with no value is
+OMITTED, never null. A new published event type needs a decision there (`standards_test.go` and `standards_fitness_test.go` fail
+otherwise) and a row in ADR 0013. `read_point_gln` is read from the `doors.gln` column fed by facility-layout's optional `gln`
+(never a sync call; an invalid GLN is dropped, not refused).
+
 ### Published types
 
 One row per published event (ADR 0004 is the authority; `subject` is the

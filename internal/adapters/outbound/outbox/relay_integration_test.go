@@ -135,7 +135,7 @@ func waitFor(t *testing.T, what string, deadline time.Duration, cond func() bool
 }
 
 func apptHeader(version int64, when time.Time) dockappointment.Header {
-	return dockappointment.Header{Appointment: apptID, Site: "WH1", Version: version, At: when}
+	return dockappointment.Header{Appointment: apptID, Site: "WH1", Version: version, At: when, Flow: shared.Inbound}
 }
 
 // appointmentFacts are the eight appointment facts, in publication order, with
@@ -201,6 +201,13 @@ func TestRelay_RealPostgresAndKafka_PublishesTheExactEnvelopes(t *testing.T) {
 	kafkatest.CreateTopic(t, outboundkafka.TopicEvents)
 	// The broker has auto-creation OFF, so the analytics topic must exist before the drain.
 	kafkatest.CreateTopic(t, outboundkafka.TopicAnalytics)
+
+	// facility-layout gave door2 (and only door2) a GS1 GLN: the doors copy the
+	// publisher resolves read_point_gln from (ADR 0013). door1 has none, so the
+	// facts at door1 are published exactly as before the standard fields existed.
+	if _, err := pool.Exec(ctx, `INSERT INTO doors (door_code, zone_id, dock_flow, gln) VALUES ($1, 'zone-wh1', 'Both', '4012345000009')`, door2); err != nil {
+		t.Fatalf("seed door2: %v", err)
+	}
 
 	pub := postgres.NewOutboxPublisher(pool)
 	pub.NewID = ids(

@@ -117,7 +117,7 @@ func seedReferenceData(t *testing.T, databaseURL string) {
 	if err := doors.UpsertZone(ctx, "zone-WH1-in", "WH1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := doors.UpsertDoor(ctx, door, "zone-WH1-in", shared.DockFlow("Inbound")); err != nil {
+	if err := doors.UpsertDoor(ctx, door, "zone-WH1-in", shared.DockFlow("Inbound"), ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, n := range []string{asn, asn2} {

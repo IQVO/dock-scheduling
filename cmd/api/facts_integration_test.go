@@ -88,6 +88,17 @@ func publishDoor(t *testing.T, code, zoneID, flow string) {
 		map[string]any{"locationCode": code, "zoneId": zoneID, "locationType": "DOCK_DOOR", "role": "Dock", "dockFlow": flow})
 }
 
+// doorGLN is the GS1 GLN facility-layout gives `door` in this journey (its ADR 0045):
+// it reaches the doors copy through the real facility consumer and comes back out
+// as read_point_gln on the facts at that door (ADR 0013).
+const doorGLN = "4006381333931"
+
+func publishDoorWithGLN(t *testing.T, code, zoneID, flow, gln string) {
+	t.Helper()
+	publish(t, inboundkafka.FacilityTopic, producerFacility, inboundkafka.TypeLocationSlotRegistered, code,
+		map[string]any{"locationCode": code, "zoneId": zoneID, "locationType": "DOCK_DOOR", "role": "Dock", "dockFlow": flow, "gln": gln})
+}
+
 func publishAsn(t *testing.T, number string) {
 	t.Helper()
 	publish(t, inboundkafka.InboundReceivingTopic, producerInbound, inboundkafka.TypeASNRegistered, number,
@@ -190,7 +201,7 @@ func nested(t *testing.T, v map[string]any, key string) map[string]any {
 // booking on it is refused as an unknown door, and it resolves once the zone
 // lands.
 func (j *journey) referenceData(t *testing.T) {
-	publishDoor(t, door, "zone-WH1-in", "Inbound")
+	publishDoorWithGLN(t, door, "zone-WH1-in", "Inbound", doorGLN)
 	waitCommitted(t, facilityGroup, inboundkafka.FacilityTopic, 1)
 	if zones, doors := count(t, j.databaseURL, `SELECT count(*) FROM zones`), count(t, j.databaseURL, `SELECT count(*) FROM doors`); zones != 0 || doors != 1 {
 		t.Fatalf("after the slot alone: zones = %d, doors = %d, want 0 and 1 (held pending)", zones, doors)
@@ -369,11 +380,13 @@ func (j *journey) factEvents(t *testing.T) {
 		t.Errorf("analytics-only events leaked onto the events topic: %v", events)
 	}
 	// ADR 0010: the door reassignment is an integration event, on both topics.
-	reassigned := map[string]any{"site_id": "WH1", "from_door_code": door2, "to_door_code": door, "version": float64(2)}
+	reassigned := map[string]any{"site_id": "WH1", "from_door_code": door2, "to_door_code": door, "version": float64(2), "read_point_gln": doorGLN}
 	has(events, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
 	analytics := byType(outboundkafka.TopicAnalytics)
 	has(analytics, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
-	has(analytics, "DockAppointmentCheckedIn", j.completed, map[string]any{"arrival_status": "ON_TIME", "visit_id": "visit-it-b"})
+	has(analytics, "DockAppointmentCheckedIn", j.completed, map[string]any{
+		"arrival_status": "ON_TIME", "visit_id": "visit-it-b", "x12_status": "X1", "cbv_biz_step": "urn:epcglobal:cbv:bizstep:arriving",
+	})
 	has(analytics, "DockAppointmentCompleted", j.completed, map[string]any{"door_code": door2})
 	has(analytics, "DockAppointmentCompleted", j.implicit, nil)
 	has(analytics, "DockAppointmentCancelled", j.turnedAway, map[string]any{"reason": "TURNED_AWAY"})
