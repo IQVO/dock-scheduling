@@ -35,7 +35,7 @@ to `warehouse.dock-scheduling.analytics`; integration events go to
 `data`, to `warehouse.dock-scheduling.analytics` (`conventions.analytics_rule`; the
 service's ADR 0004 and, for `DockAppointmentDoorReassigned`, ADR 0010).
 In the code the AsyncAPI is version 2.6.0 with one channel per topic: seven
-integration types on the events channel, all eleven on the analytics channel.
+integration types on the events channel, all eleven on the analytics channel (ADR 0012 adds three carrier events to both: ten and fourteen).
 
 ## Published
 

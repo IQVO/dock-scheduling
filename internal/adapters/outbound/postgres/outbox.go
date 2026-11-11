@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/claudioed/dock-scheduling/internal/application/usecases"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 )
@@ -18,6 +20,7 @@ import (
 const (
 	aggregDockAppointment = "dockappointment"
 	aggregDockCalendar    = "dockcalendar"
+	aggregCarrier         = "carrier"
 )
 
 // OutboxPublisher is the pgxpool-backed ports.EventPublisher: the write side
@@ -80,6 +83,24 @@ func (p *OutboxPublisher) PublishCalendarEvents(ctx context.Context, events ...d
 		}
 		env := outboxEnvelope{Event: e.EventName(), AggregateID: e.SiteID(), OccurredAt: e.OccurredAt().UTC(), Data: data}
 		if err := p.enqueue(ctx, aggregDockCalendar, e.SiteID(), env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PublishCarrierEvents implements ports.EventPublisher. A carrier fact raised
+// by an agent write (MCP) carries the attribution the use case's context holds
+// as `initiated_by` (ADR 0012); REST writes carry none.
+func (p *OutboxPublisher) PublishCarrierEvents(ctx context.Context, events ...carrier.Event) error {
+	by := initiatedBy(usecases.InitiatorFrom(ctx))
+	for _, e := range events {
+		data, err := carrierFactData(e, by)
+		if err != nil {
+			return err
+		}
+		env := outboxEnvelope{Event: e.EventName(), AggregateID: e.SCAC(), OccurredAt: e.OccurredAt().UTC(), Data: data}
+		if err := p.enqueue(ctx, aggregCarrier, e.SCAC(), env); err != nil {
 			return err
 		}
 	}

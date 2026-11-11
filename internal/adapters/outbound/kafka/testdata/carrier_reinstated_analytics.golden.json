@@ -1,0 +1,15 @@
+{
+  "specversion": "1.0",
+  "id": "e9f8a7b6-c5d4-4e3f-a2b1-0c9d8e7f6a5b",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated",
+  "subject": "ACMF",
+  "time": "2026-11-11T09:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierReinstated:v1",
+  "data": {
+    "scac": "ACMF",
+    "reinstated_at": "2026-11-11T09:00:00Z",
+    "version": 3
+  }
+}

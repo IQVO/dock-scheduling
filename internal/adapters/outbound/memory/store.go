@@ -12,6 +12,7 @@ import (
 
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/application/repository"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -29,6 +30,7 @@ type asnRow struct {
 type state struct {
 	appointments map[string]dockappointment.Snapshot
 	calendars    map[string]dockcalendar.Snapshot
+	carriers     map[string]carrier.Snapshot
 	zones        map[string]string
 	doors        map[string]door
 	asns         map[string]asnRow
@@ -40,7 +42,7 @@ type state struct {
 
 func newState() state {
 	return state{
-		appointments: map[string]dockappointment.Snapshot{}, calendars: map[string]dockcalendar.Snapshot{}, zones: map[string]string{},
+		appointments: map[string]dockappointment.Snapshot{}, calendars: map[string]dockcalendar.Snapshot{}, carriers: map[string]carrier.Snapshot{}, zones: map[string]string{},
 		doors: map[string]door{}, asns: map[string]asnRow{}, cutoffs: map[string][]repository.Cutoff{}, processed: map[string]struct{}{},
 		idempotency: map[string]repository.IdempotencyRecord{},
 	}
@@ -53,6 +55,9 @@ func (s state) clone() state {
 	}
 	for k, v := range s.calendars {
 		c.calendars[k] = v
+	}
+	for k, v := range s.carriers {
+		c.carriers[k] = v
 	}
 	for k, v := range s.zones {
 		c.zones[k] = v
@@ -131,6 +136,16 @@ func (s *Store) PublishAppointmentEvents(ctx context.Context, events ...dockappo
 
 // PublishCalendarEvents implements ports.EventPublisher.
 func (s *Store) PublishCalendarEvents(ctx context.Context, events ...dockcalendar.Event) error {
+	s.locked(ctx, func() {
+		for _, e := range events {
+			s.st.published = append(s.st.published, e)
+		}
+	})
+	return nil
+}
+
+// PublishCarrierEvents implements ports.EventPublisher.
+func (s *Store) PublishCarrierEvents(ctx context.Context, events ...carrier.Event) error {
 	s.locked(ctx, func() {
 		for _, e := range events {
 			s.st.published = append(s.st.published, e)

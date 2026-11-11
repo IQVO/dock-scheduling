@@ -23,6 +23,12 @@ type AppointmentAfter struct {
 	ID          string
 }
 
+// CarrierFilter narrows the carrier listing; a blank Status narrows nothing
+// (otherwise ACTIVE or SUSPENDED). The listing is ordered by SCAC ascending.
+type CarrierFilter struct {
+	Status string
+}
+
 // Cutoff is one CPT cutoff of a site's schedule, as the local copy keeps it.
 type Cutoff struct {
 	ID         string

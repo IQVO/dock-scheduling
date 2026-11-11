@@ -1,0 +1,1 @@
+{"parameters":[{"name":"scac","in":"path","required":true,"description":"The carrier's SCAC, 2..4 upper-case letters (anything else is 422 `invalid-scac`).","schema":{"type":"string","pattern":"^[A-Z]{2,4}$"},"example":"ACMF"}]}

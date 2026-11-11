@@ -3,7 +3,8 @@
 Status: Accepted. Source of truth: the yard model (`yard/model/model.yaml`, context `dock-scheduling`) plus the orchestrator's final
 cross-context decisions X1-X7 and dock-scheduling decisions D-1..D-13 (they override the model wording where they differ). Where
 both are silent the numbered assumptions below decide.
-Amended in part: A12 and the ImportLegacyAppointment row (the legacy importer) were removed by ADR 0011.
+Amended in part: A12 and the ImportLegacyAppointment row (the legacy importer) were removed by ADR 0011. ADR 0012 adds the `Carrier`
+aggregate (the carrier registry) and one refusal, `ErrCarrierSuspended`, to `BookAppointment` and `RescheduleAppointment`.
 
 ## Aggregates
 

@@ -50,6 +50,7 @@ const schemaVersion = 1
 const (
 	entityAppointment = "dockappointment"
 	entityCalendar    = "dockcalendar"
+	entityCarrier     = "carrier"
 )
 
 // route says where a published fact goes.
@@ -65,7 +66,7 @@ const (
 )
 
 // routeOf is ADR 0004's catalogue (DockAppointmentDoorReassigned joined the
-// integration facts in ADR 0010). An unknown combination is NOT an error —
+// integration facts in ADR 0010, the three carrier facts in ADR 0012). An unknown combination is NOT an error —
 // it yields no message (the relay dead-letters such a row instead of
 // retrying it forever).
 func routeOf(entity, event string) route {
@@ -83,6 +84,11 @@ func routeOf(entity, event string) route {
 			return integrationAndAnalytics
 		case "DoorOperatingHoursDeclared":
 			return analyticsOnly
+		}
+	case entityCarrier:
+		switch event {
+		case "CarrierRegistered", "CarrierSuspended", "CarrierReinstated":
+			return integrationAndAnalytics
 		}
 	}
 	return unpublished

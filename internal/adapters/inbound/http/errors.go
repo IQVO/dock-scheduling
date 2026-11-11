@@ -7,6 +7,7 @@ import (
 	"github.com/claudioed/dock-scheduling/internal/adapters/inbound/http/page"
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -65,6 +66,7 @@ var problemCatalogue = []struct {
 	{ports.ErrNotFound, notFound("appointment-not-found", "Appointment not found")},
 	{usecases.ErrDoorNotFound, notFound("door-not-found", "Door not found")},
 	{dockcalendar.ErrUnknownClosure, notFound("unknown-closure", "Closure not found")},
+	{carrier.ErrCarrierNotFound, notFound("carrier-not-found", "Carrier not found")},
 	{usecases.ErrPreconditionFailed, problem{http.StatusPreconditionFailed, "precondition-failed", "Precondition failed"}},
 
 	// 409: conflicts and illegal states.
@@ -78,6 +80,10 @@ var problemCatalogue = []struct {
 	{dockappointment.ErrIllegalTransition, conflict("illegal-transition", "The command is not legal in the current state")},
 	{dockappointment.ErrConcurrentUpdate, conflict("concurrent-update", "The appointment was modified by another request; re-fetch the latest version and retry")},
 	{dockappointment.ErrNoShowTooEarly, conflict("no-show-too-early", "The no-show grace has not passed")},
+	{carrier.ErrCarrierSuspended, conflict("carrier-suspended", "The carrier is suspended and may not book")},
+	{carrier.ErrCarrierAlreadyRegistered, conflict("carrier-already-registered", "The SCAC is registered with different data; update it instead")},
+	{carrier.ErrCarrierAlreadySuspended, conflict("carrier-already-suspended", "The carrier is already suspended")},
+	{carrier.ErrCarrierNotSuspended, conflict("carrier-not-suspended", "The carrier is not suspended")},
 
 	// 422: value-object and reference rules.
 	{shared.ErrInvalidDoorCode, unprocessable("invalid-door-code", "Door code is invalid")},
@@ -97,6 +103,11 @@ var problemCatalogue = []struct {
 	{dockcalendar.ErrInvalidOperatingHours, unprocessable("invalid-operating-hours", "Operating hours are invalid")},
 	{dockcalendar.ErrInvalidSettings, unprocessable("invalid-settings", "Calendar settings are invalid")},
 	{dockcalendar.ErrInvalidClosure, unprocessable("invalid-closure", "Closure is invalid")},
+	{carrier.ErrInvalidScac, unprocessable("invalid-scac", "SCAC is invalid")},
+	{carrier.ErrInvalidUSDOT, unprocessable("invalid-usdot", "USDOT number is invalid")},
+	{carrier.ErrInvalidMC, unprocessable("invalid-mc", "MC or MX number is invalid")},
+	{carrier.ErrInvalidCarrierName, unprocessable("invalid-carrier-name", "Carrier name is invalid")},
+	{carrier.ErrInvalidSuspensionReason, unprocessable("invalid-suspension-reason", "Suspension reason is invalid")},
 }
 
 // problemFor returns the problem of the first catalogue entry err matches, or

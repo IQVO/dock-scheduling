@@ -71,7 +71,7 @@ event standard. It is recorded in this repo as ADR
 ### Published types
 
 One row per published event (ADR 0004 is the authority; `subject` is the
-aggregate id — appointment id, or site id for the dockcalendar rows).
+aggregate id — appointment id, site id for the dockcalendar rows, SCAC for the carrier rows).
 
 | `type` | topic(s) | `subject` | `dataschema` |
 | --- | --- | --- | --- |
@@ -86,6 +86,9 @@ aggregate id — appointment id, or site id for the dockcalendar rows).
 | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | events (key site_id) + analytics | site id | `urn:warehouse:dock-scheduling:events:DoorClosureScheduled:v1` |
 | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted` | events (key site_id) + analytics | site id | `urn:warehouse:dock-scheduling:events:DoorClosureLifted:v1` |
 | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared` | analytics only (key site_id) | site id | `urn:warehouse:dock-scheduling:analytics:DoorOperatingHoursDeclared:v1` |
+| `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered` | events + analytics (ADR 0012) | SCAC | `urn:warehouse:dock-scheduling:events:CarrierRegistered:v1` |
+| `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended` | events + analytics (ADR 0012) | SCAC | `urn:warehouse:dock-scheduling:events:CarrierSuspended:v1` |
+| `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated` | events + analytics (ADR 0012) | SCAC | `urn:warehouse:dock-scheduling:events:CarrierReinstated:v1` |
 
 ### Consumed types
 

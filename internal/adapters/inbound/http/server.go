@@ -76,6 +76,13 @@ func NewRouter(s *Server) http.Handler {
 	r.With(keyed).Post("/sites/{siteId}/dock-calendar/closures", s.handleScheduleClosure)
 	r.With(keyed).Post("/sites/{siteId}/dock-calendar/closures/{closureId}/lifts", s.handleLiftClosure)
 
+	r.Get("/carriers", s.handleListCarriers)
+	r.Put("/carriers/{scac}", s.handlePutCarrier)
+	r.Get("/carriers/{scac}", s.handleGetCarrier)
+	r.With(keyed).Patch("/carriers/{scac}", s.handlePatchCarrier)
+	r.With(keyed).Post("/carriers/{scac}/suspensions", s.handleSuspendCarrier)
+	r.With(keyed).Post("/carriers/{scac}/reinstatements", s.handleReinstateCarrier)
+
 	r.With(s.keyed(true)).Post("/no-show-sweeps", s.handleNoShowSweep)
 	// The reports (GET /reports/*) are served by cmd/reports (NewReportsRouter).
 

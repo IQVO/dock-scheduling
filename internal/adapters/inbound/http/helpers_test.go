@@ -81,7 +81,7 @@ func newService(e *env, mod func(*depsOverride)) *usecases.Service {
 	}
 	s := e.store
 	return usecases.New(usecases.Deps{
-		Appointments: s.Appointments(), Calendars: d.calendars, Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
+		Appointments: s.Appointments(), Calendars: d.calendars, Carriers: s.Carriers(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
 		Processed: s, Events: s, Metrics: &memory.Metrics{}, IDs: &fakeIDs{}, Clock: e.clock, UoW: s,
 	})
 }

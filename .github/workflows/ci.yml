@@ -196,7 +196,7 @@ jobs:
       - name: Mutation testing (fast subset — every domain package)
         run: |
           set -euo pipefail
-          for pkg in dockappointment dockcalendar shared; do
+          for pkg in carrier dockappointment dockcalendar shared; do
             echo "::group::gremlins unleash ./internal/domain/$pkg"
             gremlins unleash "./internal/domain/$pkg"
             echo "::endgroup::"

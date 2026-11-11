@@ -42,6 +42,12 @@ Appointment `state` runs `BOOKED -> CHECKED_IN -> COMPLETED`, or `BOOKED/CHECKED
 `BOOKED -> NO_SHOW`; the last three are terminal. `ETag` is the appointment version; `If-Match` is honoured on the
 reschedule and cancel sub-resources (412 on mismatch).
 
+The **carrier registry** (ADR 0012) records who may book: a carrier is identified by its SCAC (Standard Carrier Alpha Code,
+2..4 upper-case letters, assigned by NMFTA), optionally with its USDOT number (up to 8 digits) and its MC or MX operating
+authority number. It is opt-in: a booking or reschedule that names a `carrierScac` is refused with 409 `carrier-suspended`
+only when that SCAC is registered and `SUSPENDED`; an ACTIVE carrier, an unregistered SCAC and a booking without a SCAC are
+accepted as before.
+
 Events are published as CloudEvents on `warehouse.dock-scheduling.events` through a transactional outbox (see
 `apis/asyncapi.yaml`, ADR 0004). Every `POST` is idempotent: send an `Idempotency-Key`; a replay carries
 `Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are

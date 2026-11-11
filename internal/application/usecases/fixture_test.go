@@ -56,7 +56,7 @@ func newEnv(t *testing.T) *env {
 	s := memory.NewStore()
 	e := &env{t: t, store: s, metrics: &memory.Metrics{}, clock: &fakeClock{now: t0}, ids: &fakeIDs{}}
 	e.svc = usecases.New(usecases.Deps{
-		Appointments: s.Appointments(), Calendars: s.Calendars(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
+		Appointments: s.Appointments(), Calendars: s.Calendars(), Carriers: s.Carriers(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
 		Processed: s, Events: s, Metrics: e.metrics, IDs: e.ids, Clock: e.clock, UoW: s,
 	})
 	ctx := context.Background()

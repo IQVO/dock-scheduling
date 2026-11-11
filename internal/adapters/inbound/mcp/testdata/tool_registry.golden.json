@@ -8,7 +8,7 @@
       "idempotentHint": true,
       "readOnlyHint": false
     },
-    "description": "Book a dock door window for one carrier visit. INBOUND needs at least one known, not cancelled asnNumbers entry; OUTBOUND needs a known cptId or shipmentRefs. The window is half-open [windowStart, windowEnd), on the site's slot granularity, not in the past, inside the door's operating hours and outside its closures, and may not overlap another BOOKED or CHECKED_IN appointment of the door. Refused with a typed error otherwise (door-double-booked, door-unavailable, unknown-asn, asn-already-scheduled, window-in-past, ...). Check get_door_availability first. Needs an idempotencyKey: retry with the same key and arguments to get the same answer, never a second booking.",
+    "description": "Book a dock door window for one carrier visit. INBOUND needs at least one known, not cancelled asnNumbers entry; OUTBOUND needs a known cptId or shipmentRefs. The window is half-open [windowStart, windowEnd), on the site's slot granularity, not in the past, inside the door's operating hours and outside its closures, and may not overlap another BOOKED or CHECKED_IN appointment of the door. Refused with a typed error otherwise (door-double-booked, door-unavailable, unknown-asn, asn-already-scheduled, window-in-past, carrier-suspended, ...). Check get_door_availability first. A carrierScac that is in the carrier registry and SUSPENDED is refused (carrier-suspended); an ACTIVE or unregistered SCAC, or none, is accepted as before. Needs an idempotencyKey: retry with the same key and arguments to get the same answer, never a second booking.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -794,6 +794,90 @@
       "idempotentHint": false,
       "readOnlyHint": true
     },
+    "description": "Read one registered carrier by SCAC: name, usdot, mc, status (ACTIVE or SUSPENDED), suspensionReason and suspendedAt when suspended, and the version to pass as expectedVersion on a change. A SCAC that is not registered is carrier-not-found: that does NOT mean it cannot book, an unregistered SCAC is accepted as before.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "scac": {
+          "description": "the carrier's SCAC, 2..4 upper-case letters",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scac"
+      ],
+      "type": "object"
+    },
+    "name": "get_carrier",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "mc": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "scac": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "suspendedAt": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "suspensionReason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "usdot": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scac",
+        "name",
+        "usdot",
+        "mc",
+        "status",
+        "suspensionReason",
+        "suspendedAt",
+        "version",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
     "description": "A site's door calendar with defaults applied: booking settings (max window, slot granularity, arrival tolerance, no-show grace), door operating hours (none declared = open 24x7) and the active closures.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1564,6 +1648,416 @@
   },
   {
     "_meta": {
+      "com.warehouse/authority": "L1"
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Page through the carrier registry ordered by SCAC (at most 500 per page; follow nextCursor). Optionally only carriers of one status: ACTIVE or SUSPENDED. A carrier holds its SCAC (Standard Carrier Alpha Code, 2..4 upper-case letters), name, optional USDOT number and MC or MX operating authority number, status and, when suspended, the reason.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "description": "optional nextCursor of the previous page",
+          "type": "string"
+        },
+        "limit": {
+          "description": "optional page size 1..500 (default 100)",
+          "type": "integer"
+        },
+        "status": {
+          "description": "optional status to narrow to: ACTIVE or SUSPENDED",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_carriers",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "createdAt": {
+                "type": "string"
+              },
+              "mc": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "scac": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "suspendedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "suspensionReason": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "updatedAt": {
+                "type": "string"
+              },
+              "usdot": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "scac",
+              "name",
+              "usdot",
+              "mc",
+              "status",
+              "suspensionReason",
+              "suspendedAt",
+              "version",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "nextCursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Put a carrier in the registry. Idempotent by SCAC: a new SCAC is created ACTIVE (created=true); a SCAC already registered with exactly this data answers it unchanged (created=false); the same SCAC with other data is refused (carrier-already-registered), changing a registered carrier is not offered here. Refused with invalid-scac, invalid-carrier-name, invalid-usdot or invalid-mc. Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "mc": {
+          "description": "optional operating authority number, 1..8 digits with an optional MC or MX prefix (no prefix means MC; stored as MC\u003cdigits\u003e or MX\u003cdigits\u003e)",
+          "type": "string"
+        },
+        "name": {
+          "description": "carrier name, 1..100 characters",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "scac": {
+          "description": "the carrier's SCAC, 2..4 upper-case letters (assigned by NMFTA)",
+          "type": "string"
+        },
+        "usdot": {
+          "description": "optional USDOT number, 1..8 digits",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scac",
+        "name",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "register_carrier",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "carrier": {
+          "additionalProperties": false,
+          "properties": {
+            "createdAt": {
+              "type": "string"
+            },
+            "mc": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "scac": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "suspendedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "suspensionReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "usdot": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "version": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scac",
+            "name",
+            "usdot",
+            "mc",
+            "status",
+            "suspensionReason",
+            "suspendedAt",
+            "version",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "created": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "carrier",
+        "created",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Reinstate a suspended carrier so it can book again. Refused when the carrier is not suspended (carrier-not-suspended). Pass expectedVersion (from get_carrier) to guard against a concurrent change. Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "optional version from get_carrier; the change is refused (precondition-failed) if the carrier is at another version now",
+          "type": "integer"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "scac": {
+          "description": "the SCAC of the suspended carrier to reinstate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scac",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "reinstate_carrier",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "carrier": {
+          "additionalProperties": false,
+          "properties": {
+            "createdAt": {
+              "type": "string"
+            },
+            "mc": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "scac": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "suspendedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "suspensionReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "usdot": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "version": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scac",
+            "name",
+            "usdot",
+            "mc",
+            "status",
+            "suspensionReason",
+            "suspendedAt",
+            "version",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "created": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "carrier",
+        "created",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
       "com.warehouse/authority": "L3"
     },
     "annotations": {
@@ -1841,7 +2335,7 @@
       "idempotentHint": true,
       "readOnlyHint": false
     },
-    "description": "Move a BOOKED appointment to a new window and/or door (omit doorCode to keep the door). The same checks as a booking apply to the new door and window. Pass expectedVersion (from get_appointment) to refuse the change if someone else changed the appointment meanwhile (precondition-failed). Needs an idempotencyKey.",
+    "description": "Move a BOOKED appointment to a new window and/or door (omit doorCode to keep the door). The same checks as a booking apply to the new door and window (a suspended carrier's appointment cannot be moved: carrier-suspended). Pass expectedVersion (from get_appointment) to refuse the change if someone else changed the appointment meanwhile (precondition-failed). Needs an idempotencyKey.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -2105,6 +2599,156 @@
       "required": [
         "appointment",
         "atRisk",
+        "initiatedBy",
+        "replayed"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "com.warehouse/authority": "L3"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false
+    },
+    "description": "Suspend a registered carrier with a mandatory reason: from now on a booking or reschedule that names its SCAC is refused (carrier-suspended). Appointments the carrier already holds are NOT cancelled; a person decides about them. Refused when the carrier is already suspended (carrier-already-suspended). Pass expectedVersion (from get_carrier) to guard against a concurrent change. Needs an idempotencyKey.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "description": "optional id of the calling agent, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "approvedBy": {
+          "description": "optional id of the human who approved the proposal, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "optional version from get_carrier; the change is refused (precondition-failed) if the carrier is at another version now",
+          "type": "integer"
+        },
+        "idempotencyKey": {
+          "description": "a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)",
+          "type": "string"
+        },
+        "proposalId": {
+          "description": "optional id of the proposal this change executes, recorded for attribution (max 128 characters)",
+          "type": "string"
+        },
+        "reason": {
+          "description": "why the carrier is suspended, 1..200 characters; shown to whoever is refused",
+          "type": "string"
+        },
+        "scac": {
+          "description": "the SCAC of the registered carrier to suspend",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scac",
+        "reason",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "name": "suspend_carrier",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "carrier": {
+          "additionalProperties": false,
+          "properties": {
+            "createdAt": {
+              "type": "string"
+            },
+            "mc": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "scac": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "suspendedAt": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "suspensionReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "updatedAt": {
+              "type": "string"
+            },
+            "usdot": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "version": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scac",
+            "name",
+            "usdot",
+            "mc",
+            "status",
+            "suspensionReason",
+            "suspendedAt",
+            "version",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        },
+        "created": {
+          "type": "boolean"
+        },
+        "initiatedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "approvedBy": {
+              "type": "string"
+            },
+            "proposalId": {
+              "type": "string"
+            },
+            "via": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "via"
+          ],
+          "type": "object"
+        },
+        "replayed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "carrier",
+        "created",
         "initiatedBy",
         "replayed"
       ],

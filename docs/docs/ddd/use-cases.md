@@ -8,8 +8,8 @@ description: "One section per Dock Scheduling command use case, with its trigger
 # Use Cases
 
 One section per command use case of the `Service` in `internal/application/usecases`
-(12 commands: eight on `DockAppointment`, four on `DockCalendar`). Source: `book.go`, `change.go`,
-`calendar.go`, `facts.go`, `yard.go`. The runtime sequence of each is on
+(16 commands: eight on `DockAppointment`, four on `DockCalendar`, four on `Carrier`). Source: `book.go`, `change.go`,
+`calendar.go`, `facts.go`, `yard.go`, `carriers.go`. The runtime sequence of each is on
 [Sequence Diagrams](/docs/ddd/sequence-diagrams). Reads
 (`GET /appointments`, `GET /appointments/{appointmentId}`,
 `GET /doors/{doorCode}/availability`, `GET /sites/{siteId}/dock-calendar`,
@@ -39,6 +39,9 @@ routes are served by the separate `reports` binary from the analytical database.
 | `ErrInvalidDoorCode`, `ErrInvalidSiteID`, `ErrInvalidCarrier`, `ErrInvalidDirection` | 422 | `invalid-door-code`, `invalid-site-id`, `invalid-carrier`, `invalid-direction` |
 | `ErrInvalidWindow`, `ErrWindowInPast`, `ErrUnknownDoor`, `ErrDoorFlowMismatch` | 422 | `invalid-window`, `window-in-past`, `unknown-door`, `door-flow-mismatch` |
 | `ErrUnknownAsn`, `ErrMissingOutboundRef`, `ErrDuplicateAsn`, `ErrInvalidRefs` | 422 | `unknown-asn`, `missing-outbound-ref`, `duplicate-asn`, `invalid-refs` |
+| `ErrCarrierSuspended`, `ErrCarrierAlreadyRegistered`, `ErrCarrierAlreadySuspended`, `ErrCarrierNotSuspended` (ADR 0012) | 409 | `carrier-suspended`, `carrier-already-registered`, `carrier-already-suspended`, `carrier-not-suspended` |
+| `ErrCarrierNotFound` (ADR 0012) | 404 | `carrier-not-found` |
+| `ErrInvalidScac`, `ErrInvalidUSDOT`, `ErrInvalidMC`, `ErrInvalidCarrierName`, `ErrInvalidSuspensionReason` (ADR 0012) | 422 | `invalid-scac`, `invalid-usdot`, `invalid-mc`, `invalid-carrier-name`, `invalid-suspension-reason` |
 | `ErrInvalidReason`, `ErrInvalidEta`, `ErrInvalidOperatingHours`, `ErrInvalidSettings`, `ErrInvalidClosure` | 422 | `invalid-reason`, `invalid-eta`, `invalid-operating-hours`, `invalid-settings`, `invalid-closure` |
 | Adapter-level | 400 | `idempotency-key-required`, `idempotency-key-invalid`, `malformed-request-body`, `unknown-query-parameter`, `invalid-limit`, `invalid-cursor`, `invalid-availability-query`, `invalid-query-parameter`, `invalid-path-parameter`, `invalid-if-match`, `invalid-report-range` |
 | Adapter-level | 409 | `idempotency-key-reused` |
@@ -81,10 +84,12 @@ routes are served by the separate `reports` binary from the analytical database.
      active appointment (`ErrAsnAlreadyScheduled`, the detail lists the ids); `OUTBOUND`: the `cpt_id` is in `CutoffView`, or at least one
      `shipment_ref` is given (`ErrMissingOutboundRef`).
   4. `DoorSchedule.CheckNoOverlap` against the door's `BOOKED` and `CHECKED_IN` appointments (`ErrDoorDoubleBooked`).
+  4a. When the booking names a `carrier_scac` (ADR 0012, before `checkNew`): a registered `SUSPENDED` carrier is refused
+     (`ErrCarrierSuspended`); an `ACTIVE` carrier and a SCAC that is not in the registry are accepted as before; a booking with no SCAC never reads the registry.
   5. Save the appointment in `BOOKED` and enqueue `DockAppointmentBooked` in the same transaction; return the appointment with its ETag.
 - **Errors:** `ErrInvalidDoorCode`, `ErrUnknownDoor`, `ErrInvalidCarrier`, `ErrInvalidWindow`, `ErrWindowInPast`, `ErrDuplicateAsn`,
   `ErrInvalidRefs`, `ErrDoorFlowMismatch`, `ErrDoorUnavailable`, `ErrUnknownAsn`, `ErrAsnAlreadyScheduled`, `ErrMissingOutboundRef`,
-  `ErrDoorDoubleBooked`.
+  `ErrDoorDoubleBooked`, `ErrCarrierSuspended`.
 - **Events emitted:** `DockAppointmentBooked`.
 - **Idempotency:** `Idempotency-Key`; the overlap check and the insert run
   under the same per-door lock.
@@ -99,6 +104,7 @@ routes are served by the separate `reports` binary from the analytical database.
   1. Load the appointment under a row lock; refuse a stale `If-Match` / `expectedVersion` (`ErrPreconditionFailed`, 412).
   2. Take the per-door lock of the target door (the current door when none is given), which must belong to the appointment's site
      (`ErrUnknownDoor`); refuse if the appointment is not `BOOKED` (`ErrIllegalTransition`). A reschedule may change the door and the window (decision D-4).
+  2a. The carrier registry rule of `BookAppointment` applies (ADR 0012): a registered `SUSPENDED` carrier cannot move an appointment (`ErrCarrierSuspended`).
   3. Run the same door-flow, hours and closures checks as `BookAppointment`, then `DoorSchedule.CheckNoOverlap` for the new
      window, ignoring this appointment (`ErrDoorDoubleBooked`). The ASN checks are not repeated.
   4. Keep the state `BOOKED`; store the new window and the previous one;
@@ -107,7 +113,7 @@ routes are served by the separate `reports` binary from the analytical database.
      `arrival_tolerance_minutes`), one transaction.
 - **Errors:** `ErrNotFound`, `ErrPreconditionFailed`, `ErrIllegalTransition`, `ErrConcurrentUpdate`, `ErrUnknownDoor`,
   `ErrInvalidWindow`, `ErrWindowInPast`, `ErrDoorFlowMismatch`,
-  `ErrDoorUnavailable`, `ErrDoorDoubleBooked`.
+  `ErrDoorUnavailable`, `ErrDoorDoubleBooked`, `ErrCarrierSuspended`.
 - **Events emitted:** `DockAppointmentRescheduled`.
 - **Idempotency:** `Idempotency-Key` and `If-Match`.
 
@@ -311,3 +317,45 @@ routes are served by the separate `reports` binary from the analytical database.
 - **Errors:** `ErrUnknownClosure`, `ErrClosureAlreadyLifted`, `ErrConcurrentUpdate`.
 - **Events emitted:** `DoorClosureLifted` (consumed by `yard-management`).
 - **Idempotency:** `Idempotency-Key`; a replay returns the first response.
+
+## RegisterCarrier
+
+- **Actor / trigger:** dock planner or compliance process (an agent through MCP `register_carrier`).
+- **Inbound adapter:** REST `PUT /carriers/{scac}`; MCP `register_carrier`.
+- **Preconditions:** none. The carrier registry is opt-in ([ADR 0012](/docs/adr/0012-carrier-registry)).
+- **Main flow:** (one unit of work)
+  1. Validate the SCAC (`ErrInvalidScac`, 2..4 upper-case letters) and the identity: name (`ErrInvalidCarrierName`), optional USDOT
+     (`ErrInvalidUSDOT`), optional MC or MX (`ErrInvalidMC`, normalised to `MC<digits>` or `MX<digits>`).
+  2. Lock the carrier row (`GetForUpdate`). Absent: `carrier.Register` creates it `ACTIVE` at version 1, save and enqueue
+     `CarrierRegistered` (REST `201`). Present with exactly the same data: a no-op (`200`, nothing written). Present with other data:
+     `ErrCarrierAlreadyRegistered`.
+- **Errors:** `ErrInvalidScac`, `ErrInvalidCarrierName`, `ErrInvalidUSDOT`, `ErrInvalidMC`, `ErrCarrierAlreadyRegistered`.
+- **Events emitted:** `CarrierRegistered` (first registration only).
+- **Idempotency:** idempotent by SCAC and by method; MCP takes an `idempotencyKey`.
+
+## UpdateCarrier
+
+- **Actor / trigger:** dock planner or compliance process.
+- **Inbound adapter:** REST `PATCH /carriers/{scac}` (a JSON merge patch; `Idempotency-Key` required, `If-Match` honoured). Not an MCP tool.
+- **Main flow:** lock and load the carrier (`ErrCarrierNotFound`), compare the version with `If-Match` (`ErrPreconditionFailed`), apply the
+  named fields (`null` or `""` clears USDOT or MC); a change that leaves the data as it is writes nothing.
+- **Errors:** `ErrCarrierNotFound`, `ErrPreconditionFailed`, `ErrInvalidCarrierName`, `ErrInvalidUSDOT`, `ErrInvalidMC`.
+- **Events emitted:** `CarrierRegistered` with the new full snapshot and version.
+
+## SuspendCarrier
+
+- **Actor / trigger:** dock planner or compliance process (MCP `suspend_carrier`).
+- **Inbound adapter:** REST `POST /carriers/{scac}/suspensions`; MCP `suspend_carrier`.
+- **Main flow:** lock and load the carrier, check `If-Match`, `carrier.Suspend(reason)` (`ErrInvalidSuspensionReason` for a blank or over
+  200 character reason, `ErrCarrierAlreadySuspended`), save and enqueue `CarrierSuspended`. From now on `BookAppointment` and
+  `RescheduleAppointment` refuse the SCAC with `ErrCarrierSuspended`. Appointments the carrier already holds are not touched.
+- **Events emitted:** `CarrierSuspended`.
+- **Idempotency:** `Idempotency-Key`.
+
+## ReinstateCarrier
+
+- **Actor / trigger:** dock planner or compliance process (MCP `reinstate_carrier`).
+- **Inbound adapter:** REST `POST /carriers/{scac}/reinstatements`; MCP `reinstate_carrier`.
+- **Main flow:** lock and load the carrier, check `If-Match`, `carrier.Reinstate` (`ErrCarrierNotSuspended`), save and enqueue `CarrierReinstated`.
+- **Events emitted:** `CarrierReinstated`.
+- **Idempotency:** `Idempotency-Key`.

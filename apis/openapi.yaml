@@ -16,6 +16,12 @@ info:
     `BOOKED -> NO_SHOW`; the last three are terminal. `ETag` is the appointment version; `If-Match` is honoured on the
     reschedule and cancel sub-resources (412 on mismatch).
 
+    The **carrier registry** (ADR 0012) records who may book: a carrier is identified by its SCAC (Standard Carrier Alpha Code,
+    2..4 upper-case letters, assigned by NMFTA), optionally with its USDOT number (up to 8 digits) and its MC or MX operating
+    authority number. It is opt-in: a booking or reschedule that names a `carrierScac` is refused with 409 `carrier-suspended`
+    only when that SCAC is registered and `SUSPENDED`; an ACTIVE carrier, an unregistered SCAC and a booking without a SCAC are
+    accepted as before.
+
     Events are published as CloudEvents on `warehouse.dock-scheduling.events` through a transactional outbox (see
     `apis/asyncapi.yaml`, ADR 0004). Every `POST` is idempotent: send an `Idempotency-Key`; a replay carries
     `Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
@@ -41,6 +47,8 @@ tags:
     description: Free windows per door.
   - name: Dock calendar
     description: Per-site operating hours, closures and booking settings.
+  - name: Carriers
+    description: The carrier registry, keyed by SCAC (ADR 0012).
   - name: Sweeps
     description: The scheduled no-show sweep.
   - name: Health
@@ -540,6 +548,242 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /carriers:
+    get:
+      operationId: listCarriers
+      summary: List the registered carriers
+      description: |
+        Lists the carriers of the registry ordered by SCAC, one page at a time (`limit`, `cursor`; keyset). An empty registry is `200` with
+        `{"items": []}`. The optional `status` filter must be repeated on every page request.
+      tags: [Carriers]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Narrow to one status.
+          schema: { $ref: "#/components/schemas/CarrierStatus" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of carriers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CarrierPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /carriers/{scac}:
+    parameters:
+      - $ref: "#/components/parameters/Scac"
+    put:
+      operationId: registerCarrier
+      summary: Register a carrier
+      description: |
+        Puts the carrier with this SCAC in the registry (RegisterCarrier). Idempotent by SCAC: a new SCAC is created `ACTIVE` and answered `201`
+        with a `Location`; a SCAC that is already registered with exactly this data is a no-op answered `200` (the `mc` is compared in its
+        normalised form, so `654321` and `MC-654321` are the same); a SCAC registered with DIFFERENT data is refused with 409
+        `carrier-already-registered`: change a registered carrier with `PATCH` instead. Idempotent by method, no `Idempotency-Key` needed.
+        Publishes `CarrierRegistered` (not on a no-op).
+      tags: [Carriers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCarrierRequest"
+            example:
+              name: ACME Freight
+              usdot: "1234567"
+              mc: MC-654321
+      responses:
+        "200":
+          description: The carrier was already registered with this data; nothing changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "201":
+          description: The carrier is registered.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      operationId: getCarrier
+      summary: Get a carrier
+      description: Reads one carrier by SCAC. A SCAC that is not registered is 404 `carrier-not-found`; that does NOT mean it cannot book (the registry is opt-in).
+      tags: [Carriers]
+      responses:
+        "200":
+          description: The carrier.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      operationId: updateCarrier
+      summary: Update a registered carrier
+      description: |
+        A JSON merge patch of `name`, `usdot` and `mc` (UpdateCarrier): an absent field is kept, `null` or `""` clears an optional identifier
+        (`name` cannot be cleared). The status is not patchable: use the suspension routes. A patch that changes nothing is `200` and
+        publishes nothing. Requires an `Idempotency-Key`; `If-Match` with the `ETag` is honoured (412 on mismatch). Publishes
+        `CarrierRegistered` with the new snapshot and version.
+      tags: [Carriers]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCarrierRequest"
+            example:
+              name: ACME Freight Lines
+              usdot: null
+      responses:
+        "200":
+          description: The carrier is updated (or was already as asked).
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /carriers/{scac}/suspensions:
+    parameters:
+      - $ref: "#/components/parameters/Scac"
+    post:
+      operationId: suspendCarrier
+      summary: Suspend a carrier
+      description: |
+        Suspends an `ACTIVE` carrier with a mandatory `reason` (1..200 characters). From now on a booking or reschedule naming its SCAC is
+        refused with 409 `carrier-suspended`. Appointments the carrier already holds are NOT cancelled: a person decides about them (the
+        `CarrierSuspended` event lets other contexts react). 409 `carrier-already-suspended` when it is already suspended. Requires an
+        `Idempotency-Key`; `If-Match` with the `ETag` is honoured (412 on mismatch). Publishes `CarrierSuspended`.
+      tags: [Carriers]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspendCarrierRequest"
+            example:
+              reason: insurance lapsed
+      responses:
+        "200":
+          description: The carrier is suspended.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /carriers/{scac}/reinstatements:
+    parameters:
+      - $ref: "#/components/parameters/Scac"
+    post:
+      operationId: reinstateCarrier
+      summary: Reinstate a suspended carrier
+      description: |
+        Makes a `SUSPENDED` carrier `ACTIVE` again and clears the reason; it can book again. 409 `carrier-not-suspended` when it is not
+        suspended. Takes no body. Requires an `Idempotency-Key`; `If-Match` with the `ETag` is honoured (412 on mismatch). Publishes
+        `CarrierReinstated`.
+      tags: [Carriers]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: The carrier is reinstated.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Carrier"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /no-show-sweeps:
     post:
       operationId: runNoShowSweep
@@ -668,6 +912,15 @@ components:
         type: string
         pattern: "^clo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
       example: clo-123e4567-e89b-12d3-a456-426614174001
+    Scac:
+      name: scac
+      in: path
+      required: true
+      description: The carrier's SCAC, 2..4 upper-case letters (anything else is 422 `invalid-scac`).
+      schema:
+        type: string
+        pattern: "^[A-Z]{2,4}$"
+      example: ACMF
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -686,7 +939,7 @@ components:
       name: If-Match
       in: header
       required: false
-      description: The appointment `ETag` the caller last saw; a different current version answers 412 `precondition-failed`.
+      description: The `ETag` (version) of the appointment or carrier the caller last saw; a different current version answers 412 `precondition-failed`.
       schema:
         type: string
     Limit:
@@ -720,7 +973,7 @@ components:
       schema:
         type: string
     ETag:
-      description: The weak entity tag of the appointment, `W/"<version>"`.
+      description: The weak entity tag of the appointment or carrier, `W/"<version>"`.
       schema:
         type: string
 
@@ -802,7 +1055,7 @@ components:
                 type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-if-match
                 title: If-Match header is invalid
                 status: 400
-                detail: If-Match must be the ETag of the appointment
+                detail: If-Match must be the ETag of the resource
                 instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
             invalidAvailabilityQuery:
               summary: from and to are required, from < to, at most 14 days
@@ -813,7 +1066,7 @@ components:
                 detail: availability range must be from < to, at most 14 days, minutes 1..240
                 instance: /doors/WH1-DOCK-IN-01/availability
     NotFound:
-      description: No appointment, door or closure has this id, or the path holds a NUL byte.
+      description: No appointment, door, closure or carrier has this id, or the path holds a NUL byte.
       content:
         application/problem+json:
           schema:
@@ -843,6 +1096,14 @@ components:
                 status: 404
                 detail: no such path
                 instance: /nope
+            carrierNotFound:
+              summary: No carrier has this SCAC (GET /carriers/{scac}, the carrier writes)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/carrier-not-found
+                title: Carrier not found
+                status: 404
+                detail: "carrier is not registered: ACMF"
+                instance: /carriers/ACMF
             unknownClosure:
               summary: No closure has this id (POST /sites/{siteId}/dock-calendar/closures/{closureId}/lifts)
               value:
@@ -852,7 +1113,7 @@ components:
                 detail: closure not found
                 instance: /sites/WH1/dock-calendar/closures/clo-123e4567-e89b-12d3-a456-426614174001/lifts
     Conflict:
-      description: The appointment is in the wrong state for the command, the door is booked in an overlapping window, a closure collides, another request changed the aggregate first, or the Idempotency-Key was already used with a different request (`idempotency-key-reused`).
+      description: The appointment or carrier is in the wrong state for the command, the door is booked in an overlapping window, a closure collides, another request changed the aggregate first, or the Idempotency-Key was already used with a different request (`idempotency-key-reused`).
       content:
         application/problem+json:
           schema:
@@ -930,6 +1191,38 @@ components:
                 status: 409
                 detail: the Idempotency-Key was used with a different request (method, path or body)
                 instance: /appointments
+            carrierSuspended:
+              summary: ErrCarrierSuspended (POST /appointments, reschedules)
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/carrier-suspended
+                title: The carrier is suspended and may not book
+                status: 409
+                detail: "carrier is suspended: ACMF (insurance lapsed)"
+                instance: /appointments
+            carrierAlreadyRegistered:
+              summary: ErrCarrierAlreadyRegistered (PUT /carriers/{scac})
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/carrier-already-registered
+                title: The SCAC is registered with different data; update it instead
+                status: 409
+                detail: "carrier is already registered with different data; update it instead: ACMF"
+                instance: /carriers/ACMF
+            carrierAlreadySuspended:
+              summary: ErrCarrierAlreadySuspended
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/carrier-already-suspended
+                title: The carrier is already suspended
+                status: 409
+                detail: "carrier is already suspended: ACMF"
+                instance: /carriers/ACMF/suspensions
+            carrierNotSuspended:
+              summary: ErrCarrierNotSuspended
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/carrier-not-suspended
+                title: The carrier is not suspended
+                status: 409
+                detail: "carrier is not suspended: ACMF"
+                instance: /carriers/ACMF/reinstatements
             concurrentModification:
               summary: ErrConcurrentUpdate
               value:
@@ -939,7 +1232,7 @@ components:
                 detail: re-fetch the appointment and retry the command
                 instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/cancellations
     Unprocessable:
-      description: The request is well formed JSON but a value-object or reference rule refuses it (invalid door code, carrier or window, window in the past, unknown door, door flow mismatch, unknown ASN, missing outbound reference, invalid operating hours or settings).
+      description: The request is well formed JSON but a value-object or reference rule refuses it (invalid door code, carrier or window, invalid SCAC, USDOT, MC, carrier name or suspension reason, window in the past, unknown door, door flow mismatch, unknown ASN, missing outbound reference, invalid operating hours or settings).
       content:
         application/problem+json:
           schema:
@@ -1037,6 +1330,46 @@ components:
                 status: 422
                 detail: eta must be set and its source at most 64 characters
                 instance: /appointments/appt-123e4567-e89b-12d3-a456-426614174000/eta-reports
+            invalidScac:
+              summary: ErrInvalidScac
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-scac
+                title: SCAC is invalid
+                status: 422
+                detail: scac must be 2..4 upper-case letters
+                instance: /carriers/acmf
+            invalidUsdot:
+              summary: ErrInvalidUSDOT
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-usdot
+                title: USDOT number is invalid
+                status: 422
+                detail: usdot must be 1..8 digits
+                instance: /carriers/ACMF
+            invalidMc:
+              summary: ErrInvalidMC
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-mc
+                title: MC or MX number is invalid
+                status: 422
+                detail: mc must be 1..8 digits with an optional MC or MX prefix
+                instance: /carriers/ACMF
+            invalidCarrierName:
+              summary: ErrInvalidCarrierName
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-carrier-name
+                title: Carrier name is invalid
+                status: 422
+                detail: carrier name must be 1..100 non-blank characters without control characters
+                instance: /carriers/ACMF
+            invalidSuspensionReason:
+              summary: ErrInvalidSuspensionReason
+              value:
+                type: https://errors.dock-scheduling.warehouse-systems.dev/invalid-suspension-reason
+                title: Suspension reason is invalid
+                status: 422
+                detail: suspension reason must be 1..200 non-blank characters without control characters
+                instance: /carriers/ACMF/suspensions
             invalidSettings:
               summary: ErrInvalidSettings
               value:
@@ -1054,7 +1387,7 @@ components:
                 detail: closure needs an id, a door, a span ending after it starts and a reason
                 instance: /sites/WH1/dock-calendar/closures
     PreconditionFailed:
-      description: The `If-Match` version is not the current version of the appointment.
+      description: The `If-Match` version is not the current version of the appointment or carrier.
       content:
         application/problem+json:
           schema:
@@ -1235,6 +1568,73 @@ components:
         atRisk:
           type: boolean
           description: True when the ETA is later than the window start plus the arrival tolerance (DockAppointmentAtRisk raised).
+
+    CarrierStatus:
+      type: string
+      description: "`ACTIVE <-> SUSPENDED`. Only a SUSPENDED carrier is refused when it books; an unregistered SCAC is accepted."
+      enum: [ACTIVE, SUSPENDED]
+    RegisterCarrierRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        usdot:
+          type: string
+          nullable: true
+          pattern: "^[0-9]{1,8}$"
+          description: US Department of Transportation number, 1..8 digits.
+        mc:
+          type: string
+          nullable: true
+          description: MC or MX operating authority number, 1..8 digits with an optional `MC` or `MX` prefix (case-insensitive, a space or hyphen after it is allowed). No prefix means MC. Stored and answered as `MC<digits>` or `MX<digits>`.
+    UpdateCarrierRequest:
+      type: object
+      additionalProperties: false
+      description: A JSON merge patch; at least the fields to change.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        usdot: { type: string, nullable: true, description: "1..8 digits; null or an empty string clears it." }
+        mc: { type: string, nullable: true, description: "MC or MX number; null or an empty string clears it." }
+    SuspendCarrierRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 200 }
+    Carrier:
+      type: object
+      required: [scac, name, usdot, mc, status, suspensionReason, suspendedAt, version, createdAt, updatedAt]
+      properties:
+        scac: { type: string, pattern: "^[A-Z]{2,4}$", description: "Standard Carrier Alpha Code assigned by NMFTA; the key of the carrier." }
+        name: { type: string }
+        usdot: { type: string, nullable: true, description: "US Department of Transportation number (up to 8 digits), the safety regulator's registration." }
+        mc: { type: string, nullable: true, description: "Operating authority docket number, `MC<digits>` or `MX<digits>`." }
+        status: { $ref: "#/components/schemas/CarrierStatus" }
+        suspensionReason: { type: string, nullable: true }
+        suspendedAt: { type: string, format: date-time, nullable: true }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      example:
+        scac: ACMF
+        name: ACME Freight
+        usdot: "1234567"
+        mc: MC654321
+        status: SUSPENDED
+        suspensionReason: insurance lapsed
+        suspendedAt: "2026-11-10T15:30:00Z"
+        version: 2
+        createdAt: "2026-11-10T14:00:00Z"
+        updatedAt: "2026-11-10T15:30:00Z"
+    CarrierPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Carrier" }
+        nextCursor: { type: string, nullable: true }
 
     TimeSpan:
       type: object

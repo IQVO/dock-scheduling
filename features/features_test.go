@@ -99,7 +99,7 @@ func (w *world) start() {
 	w.store, w.metrics = memory.NewStore(), &memory.Metrics{}
 	w.clock = &wall{now: time.Date(2030, 1, 7, 6, 0, 0, 0, time.UTC)}
 	w.svc = usecases.New(usecases.Deps{
-		Appointments: w.store.Appointments(), Calendars: w.store.Calendars(), Doors: w.store.Doors(), Asns: w.store.Asns(),
+		Appointments: w.store.Appointments(), Calendars: w.store.Calendars(), Carriers: w.store.Carriers(), Doors: w.store.Doors(), Asns: w.store.Asns(),
 		Cutoffs: w.store.Cutoffs(), Processed: w.store, Events: w.store, Metrics: w.metrics, IDs: &sequentialIDs{}, Clock: w.clock, UoW: w.store,
 	})
 	w.server = httptest.NewServer(inboundhttp.NewRouter(&inboundhttp.Server{
@@ -116,7 +116,7 @@ func (w *world) stop() {
 	}
 }
 
-// call sends one request; POSTs get a fresh Idempotency-Key. The answer is
+// call sends one request; POSTs and PATCHes get a fresh Idempotency-Key. The answer is
 // kept as the last response.
 func (w *world) call(method, path string, body any) error {
 	var reader io.Reader = http.NoBody
@@ -131,7 +131,7 @@ func (w *world) call(method, path string, body any) error {
 	if err != nil {
 		return err
 	}
-	if method == http.MethodPost {
+	if method == http.MethodPost || method == http.MethodPatch {
 		w.keySeq++
 		req.Header.Set("Idempotency-Key", fmt.Sprintf("bdd-%d", w.keySeq))
 	}
@@ -192,5 +192,6 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	registerBookingSteps(sc, w)
 	registerCalendarSteps(sc, w)
 	registerYardSteps(sc, w)
+	registerCarrierSteps(sc, w)
 	registerAssertions(sc, w)
 }

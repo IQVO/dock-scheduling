@@ -42,7 +42,7 @@ func newITWorld(t *testing.T) *itWorld {
 	w := &itWorld{t: t, pool: pool, metrics: &memory.Metrics{}, ids: &fixedIDs{}, ctx: context.Background(),
 		uow: postgres.NewUnitOfWork(pool), processed: postgres.NewProcessedEventRepo(pool)}
 	w.svc = usecases.New(usecases.Deps{
-		Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Doors: postgres.NewDoorStore(pool),
+		Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Carriers: postgres.NewCarrierRepo(pool), Doors: postgres.NewDoorStore(pool),
 		Asns: postgres.NewAsnStore(pool), Cutoffs: postgres.NewCutoffStore(pool), Processed: w.processed,
 		Events: postgres.NewOutboxPublisher(pool), Metrics: w.metrics, IDs: w.ids, Clock: &fixedClock{now: testNow},
 		UoW: w.uow,
