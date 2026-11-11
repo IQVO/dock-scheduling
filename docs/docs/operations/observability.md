@@ -25,7 +25,7 @@ There is **no OpenTelemetry metrics or trace SDK** in the code (`go.mod` has the
 | `dock_scheduling_implicit_arrivals_total` | counter | arrivals | none | Door releases applied to a `BOOKED` appointment (arrival implied, no `TrailerDocked` or `VisitCheckedIn` seen first). |
 | `go_*`, `process_*` | Go runtime and process collectors | | | Standard client_golang collectors. |
 
-Reading the ignored-facts counter: a steady trickle of `already_applied` is normal (redelivery). A growing `unknown_door` means the facility consumer has not delivered the door yet (or the importer was enabled too early). A growing `unknown_appointment` means yard facts cite appointments this service does not hold.
+Reading the ignored-facts counter: a steady trickle of `already_applied` is normal (redelivery). A growing `unknown_door` means the facility consumer has not delivered the door yet. A growing `unknown_appointment` means yard facts cite appointments this service does not hold.
 
 Useful queries (not shipped as rules): `sum by (route, status) (rate(dock_scheduling_http_requests_total[5m]))`; `histogram_quantile(0.95, sum by (le, route) (rate(dock_scheduling_http_request_duration_seconds_bucket[5m])))`; `increase(dock_scheduling_ignored_facts_total[1h])` by `reason`.
 

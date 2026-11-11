@@ -8,7 +8,7 @@ description: "One section per Dock Scheduling command use case, with its trigger
 # Use Cases
 
 One section per command use case of the `Service` in `internal/application/usecases`
-(13 commands: nine on `DockAppointment`, four on `DockCalendar`). Source: `book.go`, `change.go`,
+(12 commands: eight on `DockAppointment`, four on `DockCalendar`). Source: `book.go`, `change.go`,
 `calendar.go`, `facts.go`, `yard.go`. The runtime sequence of each is on
 [Sequence Diagrams](/docs/ddd/sequence-diagrams). Reads
 (`GET /appointments`, `GET /appointments/{appointmentId}`,

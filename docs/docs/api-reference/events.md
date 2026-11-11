@@ -2,12 +2,12 @@
 id: events
 title: Events
 sidebar_label: Events
-description: "The CloudEvents catalogue of dock-scheduling: the eleven published events, the fourteen consumed ones, topics, keys, envelope and delivery guarantees."
+description: "The CloudEvents catalogue of dock-scheduling: the eleven published events, the ten consumed ones, topics, keys, envelope and delivery guarantees."
 ---
 
 # Events
 
-dock-scheduling publishes **eleven** event types and consumes **fourteen**, all as CloudEvents 1.0 (structured JSON mode) on Kafka. The contract is `apis/asyncapi.yaml` (AsyncAPI 2.6.0); the catalogue is guarded by `TestEventCatalogueMatchesContract`. The narrative and the policies behind each event are on [Domain events](/docs/ddd/domain-events).
+dock-scheduling publishes **eleven** event types and consumes **ten**, all as CloudEvents 1.0 (structured JSON mode) on Kafka. The contract is `apis/asyncapi.yaml` (AsyncAPI 2.6.0); the catalogue is guarded by `TestEventCatalogueMatchesContract`. The narrative and the policies behind each event are on [Domain events](/docs/ddd/domain-events).
 
 Source: `apis/asyncapi.yaml`, `internal/adapters/outbound/kafka/encoder.go` (`routeOf`, the ADR 0004 catalogue), `internal/adapters/kafka/cloudevents/cloudevents.go`, `internal/adapters/inbound/kafka/*_consumer.go`, [ADR 0004](/docs/adr/0004-cloudevents-catalogue), [ADR 0010](/docs/adr/0010-door-reassigned-is-an-integration-event).
 
