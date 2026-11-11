@@ -7,9 +7,12 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"sync"
 
+	"github.com/claudioed/dock-scheduling/internal/application/outbox"
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/application/repository"
 	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
@@ -21,6 +24,17 @@ import (
 type door struct {
 	zoneID string
 	flow   shared.DockFlow
+	gln    string
+}
+
+// WireFact is one appointment or calendar fact as the Postgres outbox would
+// have persisted it: the event name and the wire `data` JSON (ADR 0004, with the
+// standard fields of ADR 0013). The in-memory twin renders it through the same
+// function the outbox publisher uses, so acceptance tests assert the real
+// payload, not a reimplementation of it.
+type WireFact struct {
+	Event string
+	Data  json.RawMessage
 }
 
 type asnRow struct {
@@ -38,6 +52,7 @@ type state struct {
 	processed    map[string]struct{}
 	idempotency  map[string]repository.IdempotencyRecord
 	published    []any
+	wire         []WireFact
 }
 
 func newState() state {
@@ -78,6 +93,7 @@ func (s state) clone() state {
 		c.idempotency[k] = v
 	}
 	c.published = append([]any(nil), s.published...)
+	c.wire = append([]WireFact(nil), s.wire...)
 	return c
 }
 
@@ -124,24 +140,55 @@ func (s *Store) Published() []any {
 	return append([]any(nil), s.st.published...)
 }
 
-// PublishAppointmentEvents implements ports.EventPublisher.
-func (s *Store) PublishAppointmentEvents(ctx context.Context, events ...dockappointment.Event) error {
-	s.locked(ctx, func() {
-		for _, e := range events {
-			s.st.published = append(s.st.published, e)
-		}
-	})
+// PublishedWire returns the wire data of the appointment and calendar facts
+// enqueued so far, in order (carrier facts are not rendered by this twin).
+func (s *Store) PublishedWire() []WireFact {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]WireFact(nil), s.st.wire...)
+}
+
+// glnOf is the outbox.GLNLookup over the doors copy; the caller holds the lock.
+func (s *Store) glnOf(code string) (string, error) { return s.st.doors[code].gln, nil }
+
+func (s *Store) render(event string, data any, err error) error {
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("render %s: %w", event, err)
+	}
+	s.st.wire = append(s.st.wire, WireFact{Event: event, Data: raw})
 	return nil
 }
 
-// PublishCalendarEvents implements ports.EventPublisher.
-func (s *Store) PublishCalendarEvents(ctx context.Context, events ...dockcalendar.Event) error {
+// PublishAppointmentEvents implements ports.EventPublisher.
+func (s *Store) PublishAppointmentEvents(ctx context.Context, events ...dockappointment.Event) (err error) {
 	s.locked(ctx, func() {
 		for _, e := range events {
+			data, derr := outbox.AppointmentFactData(e, s.glnOf)
+			if err = s.render(e.EventName(), data, derr); err != nil {
+				return
+			}
 			s.st.published = append(s.st.published, e)
 		}
 	})
-	return nil
+	return err
+}
+
+// PublishCalendarEvents implements ports.EventPublisher.
+func (s *Store) PublishCalendarEvents(ctx context.Context, events ...dockcalendar.Event) (err error) {
+	s.locked(ctx, func() {
+		for _, e := range events {
+			data, derr := outbox.CalendarFactData(e, s.glnOf)
+			if err = s.render(e.EventName(), data, derr); err != nil {
+				return
+			}
+			s.st.published = append(s.st.published, e)
+		}
+	})
+	return err
 }
 
 // PublishCarrierEvents implements ports.EventPublisher.

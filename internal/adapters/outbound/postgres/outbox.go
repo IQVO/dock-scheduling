@@ -3,12 +3,15 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/claudioed/dock-scheduling/internal/application/outbox"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
 	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
@@ -62,7 +65,7 @@ type outboxEnvelope struct {
 // PublishAppointmentEvents implements ports.EventPublisher.
 func (p *OutboxPublisher) PublishAppointmentEvents(ctx context.Context, events ...dockappointment.Event) error {
 	for _, e := range events {
-		data, err := appointmentFactData(e)
+		data, err := outbox.AppointmentFactData(e, p.glnLookup(ctx))
 		if err != nil {
 			return err
 		}
@@ -77,7 +80,7 @@ func (p *OutboxPublisher) PublishAppointmentEvents(ctx context.Context, events .
 // PublishCalendarEvents implements ports.EventPublisher.
 func (p *OutboxPublisher) PublishCalendarEvents(ctx context.Context, events ...dockcalendar.Event) error {
 	for _, e := range events {
-		data, err := calendarFactData(e)
+		data, err := outbox.CalendarFactData(e, p.glnLookup(ctx))
 		if err != nil {
 			return err
 		}
@@ -105,6 +108,24 @@ func (p *OutboxPublisher) PublishCarrierEvents(ctx context.Context, events ...ca
 		}
 	}
 	return nil
+}
+
+// glnLookup resolves a door's GS1 GLN from the doors local copy (ADR 0003,
+// ADR 0013) in the transaction the outbox row is written in, so the read point
+// a fact carries is the one known when the fact was recorded. An unknown door
+// and a door with no GLN both give "": the fact then omits `read_point_gln`.
+func (p *OutboxPublisher) glnLookup(ctx context.Context) outbox.GLNLookup {
+	return func(doorCode string) (string, error) {
+		var gln string
+		err := queryFor(ctx, p.pool).QueryRow(ctx, `SELECT COALESCE(gln, '') FROM doors WHERE door_code = $1`, doorCode).Scan(&gln)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("read the GLN of door %s: %w", doorCode, err)
+		}
+		return gln, nil
+	}
 }
 
 func (p *OutboxPublisher) enqueue(ctx context.Context, aggregType, aggregID string, env outboxEnvelope) error {

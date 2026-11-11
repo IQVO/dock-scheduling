@@ -43,7 +43,10 @@ func (s *Service) ConsumeZoneRegistered(ctx context.Context, eventID, zoneID, si
 
 // ConsumeSlotRegistered keeps the doors copy: a Dock slot is upserted, any
 // other role removes the row (a slot can be re-registered with another role).
-func (s *Service) ConsumeSlotRegistered(ctx context.Context, eventID, code, zoneID, role, dockFlow string) error {
+// gln is facility-layout's optional GS1 GLN of the slot ("" = none); one that
+// is not a valid GLN is dropped, never an error: an optional attribute must not
+// make a door unbookable or dead-letter a registration (ADR 0013).
+func (s *Service) ConsumeSlotRegistered(ctx context.Context, eventID, code, zoneID, role, dockFlow, gln string) error {
 	return s.consume(ctx, eventID, func(ctx context.Context) error {
 		if role != "Dock" {
 			return s.d.Doors.RemoveDoor(ctx, code)
@@ -52,7 +55,10 @@ func (s *Service) ConsumeSlotRegistered(ctx context.Context, eventID, code, zone
 		if err != nil {
 			return err
 		}
-		return s.d.Doors.UpsertDoor(ctx, code, zoneID, flow)
+		if _, err := shared.NewGLN(gln); err != nil {
+			gln = ""
+		}
+		return s.d.Doors.UpsertDoor(ctx, code, zoneID, flow, gln)
 	})
 }
 

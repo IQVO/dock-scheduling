@@ -330,9 +330,12 @@ func (j *journey) publishedEvents(t *testing.T) {
 		"window_start": j.windowStart.Format(time.RFC3339), "window_end": j.windowEnd.Format(time.RFC3339),
 		"asn_numbers": []any{asn}, "cpt_id": nil, "shipment_refs": []any{},
 		"expected_seal_number": "SEAL-77120", "arrival_tolerance_minutes": float64(15), "provenance": "native", "version": float64(1),
+		// ADR 0013: an INBOUND booking is a delivery appointment (AB) and its door has a GLN.
+		"x12_status": "AB", "read_point_gln": doorGLN,
 	}
 	cancelledData := map[string]any{
 		"appointment_id": j.apptID, "site_id": "WH1", "door_code": door, "reason": "CARRIER_REQUEST", "version": float64(2),
+		"read_point_gln": doorGLN, // a cancellation has no honest standard status, only its read point
 	}
 	booked := func(stream string, data map[string]any) map[string]any {
 		return envelope("dockappointment.DockAppointmentBooked", j.apptID, stream, "DockAppointmentBooked", data)

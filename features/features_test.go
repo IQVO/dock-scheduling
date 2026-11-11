@@ -193,5 +193,6 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	registerCalendarSteps(sc, w)
 	registerYardSteps(sc, w)
 	registerCarrierSteps(sc, w)
+	registerStandardsSteps(sc, w)
 	registerAssertions(sc, w)
 }

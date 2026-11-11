@@ -36,6 +36,9 @@ to `warehouse.dock-scheduling.analytics`; integration events go to
 service's ADR 0004 and, for `DockAppointmentDoorReassigned`, ADR 0010).
 In the code the AsyncAPI is version 2.6.0 with one channel per topic: seven
 integration types on the events channel, all eleven on the analytics channel (ADR 0012 adds three carrier events to both: ten and fourteen).
+Since ADR 0013 every appointment fact (and every door closure) can also carry the optional `x12_status`, `cbv_biz_step` and
+`read_point_gln` fields, the standard meaning of the fact (ANSI X12 214 code, GS1 CBV business step, GS1 GLN of the door); the mapping is
+one table in `internal/domain/standards`, and an event with no honest mapping carries none of the first two.
 
 ## Published
 

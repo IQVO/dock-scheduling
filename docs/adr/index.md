@@ -25,3 +25,4 @@ DockAppointmentDoorReassigned rows of ADR 0002 and ADR 0004 and the analytics-on
 | [0010](./0010-door-reassigned-is-an-integration-event.md) | DockAppointmentDoorReassigned is an integration event | Accepted (2026-11-09) |
 | [0011](./0011-legacy-importer-removed.md) | The legacy appointment importer is removed (ADR 0019 stage E, dock-scheduling side) | Accepted (2026-11-10) |
 | [0012](./0012-carrier-registry.md) | The carrier registry: carriers keyed by SCAC, an opt-in booking rule and three carrier events | Accepted (2026-11-10) |
+| [0013](./0013-standard-vocabulary-on-published-facts.md) | Standard vocabulary on published facts: X12 214 status, CBV business step and read-point GLN | Accepted (2026-11-10) |

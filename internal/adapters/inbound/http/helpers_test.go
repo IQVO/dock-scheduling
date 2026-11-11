@@ -60,9 +60,9 @@ func newEnv(t *testing.T) *env {
 	e.router = inboundhttp.NewRouter(e.server)
 	ctx := context.Background()
 	must(t, s.Doors().UpsertZone(ctx, "zone-dock", "WH1"))
-	must(t, s.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound))
-	must(t, s.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound))
-	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth))
+	must(t, s.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth, ""))
 	for _, n := range []string{"ASN-1", "ASN-2", "ASN-3"} {
 		must(t, s.Asns().Register(ctx, n, at8))
 	}

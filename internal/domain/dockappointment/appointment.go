@@ -176,7 +176,7 @@ func refToken(v string) bool {
 }
 
 func (a *DockAppointment) header(at time.Time) Header {
-	return Header{Appointment: string(a.id), Site: string(a.site), Version: a.version, At: at.UTC()}
+	return Header{Appointment: string(a.id), Site: string(a.site), Version: a.version, At: at.UTC(), Flow: a.direction}
 }
 
 func (a *DockAppointment) touch(at time.Time) {

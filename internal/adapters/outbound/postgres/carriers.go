@@ -114,3 +114,12 @@ func scanCarrier(row pgx.Row) (*carrier.Carrier, error) {
 	}
 	return carrier.Restore(s)
 }
+
+// nullableTime is the SQL argument of an optional instant: the zero time is NULL.
+func nullableTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := t.UTC()
+	return &u
+}

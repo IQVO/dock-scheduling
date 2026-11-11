@@ -29,7 +29,7 @@ const roleDock = "Dock"
 // *usecases.Service implements it.
 type FacilityUseCases interface {
 	ConsumeZoneRegistered(ctx context.Context, eventID, zoneID, siteCode string) error
-	ConsumeSlotRegistered(ctx context.Context, eventID, code, zoneID, role, dockFlow string) error
+	ConsumeSlotRegistered(ctx context.Context, eventID, code, zoneID, role, dockFlow, gln string) error
 	ConsumeSlotDecommissioned(ctx context.Context, eventID, code string) error
 }
 
@@ -51,6 +51,9 @@ type (
 		Role              string `json:"role"`
 		DockFlow          string `json:"dockFlow"`
 		DockFlowSnake     string `json:"dock_flow"`
+		// GLN is facility-layout's optional GS1 GLN (its ADR 0045): absent or
+		// null on a slot registered without one.
+		GLN string `json:"gln"`
 	}
 )
 
@@ -84,7 +87,7 @@ func FacilityHandlers(uc FacilityUseCases, logger *slog.Logger) map[string]Handl
 			} else if err := require(e.Type(), map[string]string{"locationCode": code}); err != nil {
 				return err
 			}
-			return uc.ConsumeSlotRegistered(ctx, e.ID(), code, zone, role, flow)
+			return uc.ConsumeSlotRegistered(ctx, e.ID(), code, zone, role, flow, strings.TrimSpace(d.GLN))
 		}),
 		TypeLocationSlotDecommissioned: typed(logger, func(ctx context.Context, e ce.Event, d slotData) error {
 			code := firstNonBlank(d.LocationCode, d.LocationCodeSnake)

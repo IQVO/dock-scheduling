@@ -17,6 +17,8 @@
     "previous_window_start": "2026-11-06T08:00:00Z",
     "previous_window_end": "2026-11-06T10:00:00Z",
     "arrival_tolerance_minutes": 15,
-    "version": 2
+    "version": 2,
+    "x12_status": "AB",
+    "read_point_gln": "4012345000009"
   }
 }

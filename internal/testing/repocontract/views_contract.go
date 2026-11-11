@@ -76,7 +76,7 @@ func runDoors(t *testing.T, f Factory) {
 	if d, err := e.Doors.Door(ctx, "D1"); d != nil || err != nil {
 		t.Fatalf("unknown door = %v, %v", d, err)
 	}
-	if err := e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth); err != nil {
+	if err := e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth, ""); err != nil {
 		t.Fatal(err)
 	}
 	if d, _ := e.Doors.Door(ctx, "D1"); d != nil {
@@ -95,8 +95,8 @@ func runDoorUpdates(t *testing.T, f Factory) {
 	ctx := context.Background()
 	e := f(t)
 	_ = e.Doors.UpsertZone(ctx, "zone-1", "WH1")
-	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth)
-	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowInbound)
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth, "")
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowInbound, "")
 	d, _ := e.Doors.Door(ctx, "D1")
 	if d.Flow != shared.FlowInbound {
 		t.Fatalf("upsert must replace the flow: %+v", d)
@@ -113,6 +113,36 @@ func runDoorUpdates(t *testing.T, f Factory) {
 	}
 	if err := e.Doors.RemoveDoor(ctx, "D1"); err != nil {
 		t.Fatalf("removing an unknown door is a no-op: %v", err)
+	}
+}
+
+// runDoorGLN: the optional GS1 GLN of a door (ADR 0013) is stored with the door,
+// a re-registration that carries none keeps the known one, a new one replaces
+// it, and removing the door removes it.
+func runDoorGLN(t *testing.T, f Factory) {
+	ctx := context.Background()
+	e := f(t)
+	_ = e.Doors.UpsertZone(ctx, "zone-1", "WH1")
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth, "")
+	if d, _ := e.Doors.Door(ctx, "D1"); d == nil || d.GLN != "" {
+		t.Fatalf("a door registered without a GLN has none: %+v", d)
+	}
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth, "4006381333931")
+	if d, _ := e.Doors.Door(ctx, "D1"); d.GLN != "4006381333931" {
+		t.Fatalf("the GLN is stored with the door: %+v", d)
+	}
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowInbound, "")
+	if d, _ := e.Doors.Door(ctx, "D1"); d.GLN != "4006381333931" || d.Flow != shared.FlowInbound {
+		t.Fatalf("a re-registration without a GLN keeps the known one and still applies the rest: %+v", d)
+	}
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowInbound, "4012345000009")
+	if d, _ := e.Doors.Door(ctx, "D1"); d.GLN != "4012345000009" {
+		t.Fatalf("a new GLN replaces the old: %+v", d)
+	}
+	_ = e.Doors.RemoveDoor(ctx, "D1")
+	_ = e.Doors.UpsertDoor(ctx, "D1", "zone-1", shared.FlowBoth, "")
+	if d, _ := e.Doors.Door(ctx, "D1"); d.GLN != "" {
+		t.Fatalf("a removed door takes its GLN with it: %+v", d)
 	}
 }
 
