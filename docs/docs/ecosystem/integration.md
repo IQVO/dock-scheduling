@@ -33,7 +33,7 @@ Behaviour common to every consumer (`internal/adapters/inbound/kafka/kafka.go`, 
 - A transient failure (Postgres down, concurrent update) is retried on the same message with capped exponential backoff, forever; the partition waits.
 - Facts the policies deliberately do not apply (unknown or terminal appointment, door not yet known, another site) are counted in `dock_scheduling_ignored_facts_total{reason}` and marked processed.
 - Yard facts are keyed by visit or trailer, not by appointment, so they can arrive in any order; a door release on a `BOOKED` appointment completes it and records the arrival as implicit.
-- A new consumer group starts at the first offset and replays; the local copies converge. The importer should be enabled only after the facility consumer has caught up.
+- A new consumer group starts at the first offset and replays; the local copies converge.
 
 ## Downstreams (consume this service's events)
 
@@ -56,27 +56,29 @@ Failure behaviour for consumers is each consumer's own (retry, dead-letter `ware
 | Client | Interface | Notes |
 | --- | --- | --- |
 | Carrier schedulers, dock planners, consoles, other contexts | REST on `cmd/api` (`/api/dock-scheduling` behind Kong) | OpenAPI `apis/openapi.yaml`; unauthenticated; the gateway adds no auth. |
-| Agents | MCP on `cmd/mcp` (`/api/mcp/dock-scheduling` behind Kong) | Five read tools, four L3 write tools; see [MCP tools](/docs/mcp/tools). |
-| Report readers | REST on `cmd/reports` (`/api/dock-scheduling/reports` behind Kong) | `apis/openapi-reports.yaml`; reads the analytical database only. |
-| Kubernetes CronJob | `POST /no-show-sweeps` via `cmd/sweep` | The only timer; nothing in the service calls the endpoint itself. |
+| Agents | MCP on `cmd/mcp` (`/api/mcp/dock-scheduling` behind Kong) | Five read tools, four L3 write tools; see [MCP tools](/docs/mcp/tools). Not running on k3s (switched off in `warehouse-infra`, read 2026-11-10): no pod, no route. |
+| Report readers | REST on `cmd/reports` (`/api/dock-scheduling/reports` behind Kong) | `apis/openapi-reports.yaml`; reads the analytical database only. Not running on k3s (analytics switched off, read 2026-11-10): no pod, no route. |
+| Kubernetes CronJob | `POST /no-show-sweeps` via `cmd/sweep` | The only timer; nothing in the service calls the endpoint itself. Switched off on k3s (read 2026-11-10): no CronJob exists, so the endpoint is called by hand. |
 
 ## Edge status
 
-An edge is **live** only when both ends run in the cluster. `dock-scheduling` is registered in `warehouse-infra` develop but not applied (`kubectl get pods -n warehouse-systems` lists no `dock-scheduling` pod, checked 2026-11-09), so **no edge below is live**. The consumer groups are configured in the `warehouse-infra` helm values (`helm-values/dock-scheduling.yaml` and the neighbour's own file); "wired in infra" means the group is configured there. The neighbour column reflects the pods listed by the same command.
+Read-only on 2026-11-10 (`kubectl get pods,deploy -n warehouse-systems`, context `k3s-multipass`). An edge is **live** only when both ends run in the cluster **and** the consumer or producer code and the spec declare it. `dock-scheduling` is applied (Argo application Synced and Healthy, api pod Ready at `v0.1.2`; see the [Runbook](/docs/operations/runbook#what-runs-on-the-k3s-cluster)), so an edge is live when the neighbour also runs. The consumer groups are those of the `warehouse-infra` helm values (`helm-values/dock-scheduling.yaml` and the neighbour's own file) and of the running Deployments' environment. "Live" here means both ends run and declare the edge; it does **not** say events flow without lag: consumer group offsets and lag need `kubectl exec` and were not read.
 
-| Edge | Direction | Consumer group in `warehouse-infra` | Neighbour in the cluster | Status |
+| Edge | Direction | Consumer group | Neighbour in the cluster (image running) | Status |
 | --- | --- | --- | --- | --- |
-| `yard-management` | in: `warehouse.yard-management.events` | `dock-scheduling-yard` | no pod (registered, not applied) | wired in infra, not applied |
-| `yard-management` | out: `warehouse.dock-scheduling.events` | `yard-management-dock-scheduling` | no pod (registered, not applied) | wired in infra, not applied |
-| `facility-layout` | in: `warehouse.facility.events` | `dock-scheduling-facility` | pod running | not live: this service is not applied; wired in infra |
-| `inbound-receiving` | in: `warehouse.inbound-receiving.events` | `dock-scheduling-asn` | pod running | not live: this service is not applied; wired in infra |
-| `inbound-receiving` | out: `warehouse.dock-scheduling.events` | `inbound-receiving-dock-appointments` | pod running | not live: this service is not applied; wired in infra |
-| `process-path-management` | in: `warehouse.process-path-management.events` | `dock-scheduling-cpt` | pod running | not live: this service is not applied; wired in infra |
-| `warehouse-planning` | out: `warehouse.dock-scheduling.events` | `warehouse-planning-dock-appointments` | pod running | not live: this service is not applied; wired in infra |
-| `exception-management` | out: `warehouse.dock-scheduling.events` | none: `helm-values/exception-management.yaml` has no dock-scheduling group | pod running | not live, and not wired in infra |
-| `outbound-shipping` | out: `warehouse.dock-scheduling.events` | none: no `warehouse-infra` entry or helm values found for it | no pod | not live, not registered in infra |
+| `yard-management` | in: `warehouse.yard-management.events` | `dock-scheduling-yard` | `yard-management` api and `yard-management-relay` Ready (`da1e30e`, `v0.1.2`) | live |
+| `yard-management` | out: `warehouse.dock-scheduling.events` | `yard-management-dock-scheduling` | same pods; the consumer is in its api | live |
+| `facility-layout` | in: `warehouse.facility.events` | `dock-scheduling-facility` | `facility-layout` Ready (`1305245`) | live |
+| `inbound-receiving` | in: `warehouse.inbound-receiving.events` | `dock-scheduling-asn` | `inbound-receiving` Ready (`484490f`, v2.0.6) | live |
+| `inbound-receiving` | out: `warehouse.dock-scheduling.events` | `inbound-receiving-dock-appointments` | same pod; `dock_appointment_consumer.go` at `484490f` | live |
+| `process-path-management` | in: `warehouse.process-path-management.events` | `dock-scheduling-cpt` | `process-path-management` Ready (`a336eaf`) | live |
+| `warehouse-planning` | out: `warehouse.dock-scheduling.events` | `warehouse-planning-dock-appointments` | `warehouse-planning` Ready (`ef8b946`); `dock_appointment_consumer.go` | live |
+| `exception-management` | out: `warehouse.dock-scheduling.events` | `exception-management-dock-scheduling` | `exception-management` Ready (`35bb7d9`); `dock_scheduling_exceptions_consumer.go`; the Deployment carries `DOCK_SCHEDULING_EXCEPTIONS_CONSUMER_GROUP` | live |
+| `outbound-shipping` | out: `warehouse.dock-scheduling.events` | none: no `warehouse-infra` entry or helm values found for it | no pod (`kubectl get deploy outbound-shipping`: NotFound) | not live, not registered in infra |
 
-The consumers' side of these rows (the event types a neighbour reads) comes from the neighbours' own code, as the tables above say; the "Consumer group" and "Neighbour in the cluster" columns come from `warehouse-infra` `origin/develop` and the cluster listing, not from their code. Each edge becomes live when this service and the neighbour both run, and the yard-domain topics have been pre-created first (see the [Runbook](/docs/operations/runbook#registration-in-warehouse-infra)).
+The consumers' side of these rows (the event types a neighbour reads) comes from the neighbours' own code and specs at the commit each pod runs (the image tag is that commit), as the tables above say; the group and neighbour columns come from `warehouse-infra` `origin/develop` and the cluster listing. The `exception-management` row was "not wired in infra" until the `exception-management` group ids were pinned (`warehouse-infra` commit `a703971`, 2026-11-09); the running Deployment now carries it.
+
+Not verified: the offsets and lag of every group, whether the topics hold the events a consumer expects, and delivery from this service's outbox. The api log of the dock pod shows `kafka reader error; retrying` lines with `i/o timeout` on the yard, facility, inbound-receiving and process-path-management topics at 23:21Z on 2026-11-10 (quoted in the [Runbook](/docs/operations/runbook#what-runs-on-the-k3s-cluster)); they were not diagnosed.
 
 ## Edges that do not exist
 

@@ -35,7 +35,7 @@ function HomepageHeader() {
           {siteConfig.title}
         </Heading>
         <p className={styles.heroSubtitle}>{siteConfig.tagline}</p>
-        <p className={styles.heroLead}>The door calendar of every site: every booked window on every dock door, inbound and outbound, with no double booking, door hours and closures, ETA risk and no-shows. Built on develop, registered in warehouse-infra develop, not applied to the cluster.</p>
+        <p className={styles.heroLead}>The door calendar of every site: every booked window on every dock door, inbound and outbound, with no double booking, door hours and closures, ETA risk and no-shows. Built on develop and applied to the k3s cluster at v0.1.2 (api only; read-only check on 2026-11-10).</p>
         <div className={styles.buttons}>
           <Link className="button button--primary button--lg" to="/docs/overview/introduction">
             Read the docs
