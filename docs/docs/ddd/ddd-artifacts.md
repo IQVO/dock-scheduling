@@ -23,7 +23,7 @@ Source: `internal/domain/`, `internal/application/`, `internal/adapters/`, `migr
 | [Class diagram](/docs/ddd/class-diagram) | Domain types and the hexagonal ports and adapters | UML |
 | [Entity relationship](/docs/ddd/entity-relationship) | The Postgres schema (OLTP and analytics) | ER |
 | [Sequence diagrams](/docs/ddd/sequence-diagrams) | One runtime sequence per command use case | UML |
-| [Domain events](/docs/ddd/domain-events) | The eleven published and fourteen consumed events with full CloudEvents types | event catalogue |
+| [Domain events](/docs/ddd/domain-events) | The eleven published and ten consumed events with full CloudEvents types | event catalogue |
 
 Also in this section: [Use cases](/docs/ddd/use-cases) (one section per command: trigger, inputs, invariants, errors, events) and [Subdomain classification](/docs/ddd/subdomain-classification).
 
@@ -32,8 +32,8 @@ Also in this section: [Use cases](/docs/ddd/use-cases) (one section per command:
 | Item | Count | Where |
 | --- | --- | --- |
 | Aggregates | 2: `DockAppointment` (5 states: `BOOKED`, `CHECKED_IN`, `COMPLETED`, `CANCELLED`, `NO_SHOW`), `DockCalendar` | [Aggregate design canvas](/docs/ddd/aggregate-design-canvas) |
-| Command use cases | 13 (nine on `DockAppointment`, four on `DockCalendar`) | [Use cases](/docs/ddd/use-cases) |
+| Command use cases | 12 (eight on `DockAppointment`, four on `DockCalendar`) | [Use cases](/docs/ddd/use-cases) |
 | Published events | 11 (7 integration plus analytics twin, 4 analytics only) | [Events](/docs/api-reference/events) |
-| Consumed events | 14 from four upstream topics | [Events](/docs/api-reference/events) |
+| Consumed events | 10 from four upstream topics | [Events](/docs/api-reference/events) |
 | REST routes | 13 business routes plus `/healthz`, `/readyz`, `/metrics` on the API; 2 report routes on the reports binary | [API reference](/docs/api-reference) |
-| ADRs | 10 | [ADR index](/docs/adr) |
+| ADRs | 11 | [ADR index](/docs/adr) |
