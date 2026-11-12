@@ -461,11 +461,10 @@ components:
           summary: "The site's operating-hours rows were replaced."
           payload: {"specversion": "1.0", "id": "00001010-1111-4222-8333-444455556666", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared", "subject": "WH1", "time": "2026-11-05T12:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:analytics:DoorOperatingHoursDeclared:v1", "data": {"site_id": "WH1", "door_code": null, "operating_hours": [{"door_code": null, "weekday": "MON", "opens_at": "06:00", "closes_at": "22:00", "timezone": "America/Sao_Paulo"}], "version": 2}}
     CarrierRegistered:
-      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
       name: CarrierRegistered
       title: "CarrierRegistered"
       summary: "A carrier was registered or its data was updated."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Integration stream. Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
       contentType: application/cloudevents+json
       tags:
         - name: carrier
@@ -476,11 +475,10 @@ components:
           summary: "A carrier was registered or its data was updated."
           payload: {"specversion": "1.0", "id": "7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered", "subject": "ACMF", "time": "2026-11-10T14:00:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:CarrierRegistered:v1", "data": {"scac": "ACMF", "name": "ACME Freight", "usdot": "1234567", "mc": "MC654321", "status": "ACTIVE", "reason": null, "suspended_at": null, "version": 1}}
     CarrierSuspended:
-      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
       name: CarrierSuspended
       title: "CarrierSuspended"
       summary: "A carrier was suspended; it can no longer book."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Integration stream. Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
       contentType: application/cloudevents+json
       tags:
         - name: carrier
@@ -491,11 +489,10 @@ components:
           summary: "A carrier was suspended; it can no longer book."
           payload: {"specversion": "1.0", "id": "b8a79685-7463-4e52-8d41-30f2e1d0c9ba", "source": "/warehouse/dock-scheduling", "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended", "subject": "ACMF", "time": "2026-11-10T15:30:00Z", "datacontenttype": "application/json", "dataschema": "urn:warehouse:dock-scheduling:events:CarrierSuspended:v1", "data": {"scac": "ACMF", "reason": "insurance lapsed", "suspended_at": "2026-11-10T15:30:00Z", "version": 2}}
     CarrierReinstated:
-      x-no-consumer-reason: "no consumer yet: yard-management will copy the carrier registry in a later item (YF-1)"
       name: CarrierReinstated
       title: "CarrierReinstated"
       summary: "A suspended carrier was reinstated; it can book again."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Integration stream. Planned consumer: yard-management (not yet consuming). `scac`, `reinstated_at`, `version`."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Integration stream. Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). `scac`, `reinstated_at`, `version`."
       contentType: application/cloudevents+json
       tags:
         - name: carrier
@@ -510,7 +507,7 @@ components:
       name: CarrierRegistered
       title: "CarrierRegistered"
       summary: "A carrier was registered or its data was updated."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). Full carrier snapshot after the first registration and after each update; `version` is the carrier version."
       contentType: application/cloudevents+json
       tags:
         - name: analytics
@@ -525,7 +522,7 @@ components:
       name: CarrierSuspended
       title: "CarrierSuspended"
       summary: "A carrier was suspended; it can no longer book."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). `scac`, `reason`, `suspended_at`, `version`. Existing appointments of the carrier are not cancelled."
       contentType: application/cloudevents+json
       tags:
         - name: analytics
@@ -540,7 +537,7 @@ components:
       name: CarrierReinstated
       title: "CarrierReinstated"
       summary: "A suspended carrier was reinstated; it can book again."
-      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Planned consumer: yard-management (not yet consuming). `scac`, `reinstated_at`, `version`."
+      description: "`type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`; subject and Kafka key = SCAC. Analytics twin (same id and type, dataschema `analytics`). Consumed by yard-management (the carrier registry copy, ADR 0016 / YF-1). `scac`, `reinstated_at`, `version`."
       contentType: application/cloudevents+json
       tags:
         - name: analytics
