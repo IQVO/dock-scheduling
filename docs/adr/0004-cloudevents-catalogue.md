@@ -22,9 +22,9 @@ One `type:` line per published type and stream:
 | DoorClosureScheduled | events (key site_id) | yard-management | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled |
 | DoorClosureLifted | events (key site_id) | yard-management | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted |
 | DoorOperatingHoursDeclared | analytics only (key site_id) | analytics only | type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared |
-| CarrierRegistered | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered |
-| CarrierSuspended | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended |
-| CarrierReinstated | events (key scac, per ADR 0012) | none yet (yard-management planned) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated |
+| CarrierRegistered | events (key scac, per ADR 0012) | yard-management (the carrier registry copy, ADR 0016 / YF-1) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered |
+| CarrierSuspended | events (key scac, per ADR 0012) | yard-management (the carrier registry copy, ADR 0016 / YF-1) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended |
+| CarrierReinstated | events (key scac, per ADR 0012) | yard-management (the carrier registry copy, ADR 0016 / YF-1) | type: com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated |
 
 Analytics-only events go ONLY to `warehouse.dock-scheduling.analytics`. The version of an appointment event is the aggregate
 version after the change; calendar events carry the DockCalendar version; carrier events (ADR 0012, subject and key = the SCAC) carry the Carrier version. DockAppointmentAtRisk has no `version` (it is advisory
