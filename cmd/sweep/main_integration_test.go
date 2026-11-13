@@ -139,8 +139,12 @@ func TestRunMainSweepsDueBookedAppointmentsToNoShow(t *testing.T) {
 	if data["version"] != float64(2) {
 		t.Fatalf("DockAppointmentNoShow version = %v, want 2", data["version"])
 	}
-	if windowEndJSON, _ := data["window_end"].(string); windowEndJSON != windowEnd.Format(time.RFC3339Nano) {
-		t.Fatalf("DockAppointmentNoShow window_end = %v, want %s", data["window_end"], windowEnd.Format(time.RFC3339Nano))
+	// window_end round-trips through timestamptz, whose precision is the
+	// microsecond: the nanosecond part of the in-memory value cannot
+	// survive, so the expectation is the truncated instant (the stored
+	// value the encoder actually read).
+	if windowEndJSON, _ := data["window_end"].(string); windowEndJSON != windowEnd.Truncate(time.Microsecond).Format(time.RFC3339Nano) {
+		t.Fatalf("DockAppointmentNoShow window_end = %v, want %s", data["window_end"], windowEnd.Truncate(time.Microsecond).Format(time.RFC3339Nano))
 	}
 	waitForEmptyOutbox(t, pool)
 
