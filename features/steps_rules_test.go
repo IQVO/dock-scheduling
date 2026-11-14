@@ -235,31 +235,44 @@ func registerFactAssertions(sc *godog.ScenarioContext, w *world) {
 		return nil
 	})
 	sc.Step(`^the latest (Dock\w+|Door\w+) fact carries (\w+) (.+)$`, func(event, field, literal string) error {
-		wire := w.store.PublishedWire()
-		for i := len(wire) - 1; i >= 0; i-- {
-			if wire[i].Event != event {
-				continue
-			}
-			var data map[string]any
-			if err := json.Unmarshal(wire[i].Data, &data); err != nil {
-				return err
-			}
-			return w.wantDataField(event, data, field, literal)
+		data, err := w.latestFact(event)
+		if err != nil {
+			return err
 		}
-		return fmt.Errorf("no %s fact was published; published: %v", event, w.eventNames())
+		return w.wantDataField(event, data, field, literal)
 	})
 	sc.Step(`^(\d+) (Dock\w+|Door\w+) events? (?:was|were) published$`, func(want int, event string) error {
-		got := 0
-		for _, name := range w.eventNames() {
-			if name == event {
-				got++
-			}
-		}
-		if got != want {
-			return fmt.Errorf("%d %s events published, want %d (published: %v)", got, event, want, w.eventNames())
-		}
-		return nil
+		return w.wantEventsOfType(event, want)
 	})
+}
+
+// latestFact decodes the data of the newest published fact of a type.
+func (w *world) latestFact(event string) (map[string]any, error) {
+	wire := w.store.PublishedWire()
+	for i := len(wire) - 1; i >= 0; i-- {
+		if wire[i].Event != event {
+			continue
+		}
+		var data map[string]any
+		if err := json.Unmarshal(wire[i].Data, &data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
+	return nil, fmt.Errorf("no %s fact was published; published: %v", event, w.eventNames())
+}
+
+func (w *world) wantEventsOfType(event string, want int) error {
+	got := 0
+	for _, name := range w.eventNames() {
+		if name == event {
+			got++
+		}
+	}
+	if got != want {
+		return fmt.Errorf("%d %s events published, want %d (published: %v)", got, event, want, w.eventNames())
+	}
+	return nil
 }
 
 func (w *world) wantDataField(what string, data map[string]any, field, literal string) error {
