@@ -8,8 +8,9 @@ description: "Every event Dock Scheduling publishes and consumes, with full Clou
 # Domain Events
 
 Every event this context publishes and consumes, from
-`contexts[dock-scheduling].publishes` and `.consumes`. The envelope follows
-`conventions.cloudevents` in the design model.
+`contexts[dock-scheduling].publishes` and `.consumes`; the three carrier events
+(ADR 0012) are read from `apis/asyncapi.yaml` and `internal/domain/carrier/events.go`.
+The envelope follows `conventions.cloudevents` in the design model.
 
 ## Envelope
 
@@ -18,13 +19,13 @@ Every event this context publishes and consumes, from
 | `specversion` | `1.0` (structured JSON mode) |
 | `id` | a UUID minted once, when the event is written to the outbox; a redelivery carries the same `id` |
 | `source` | `/warehouse/dock-scheduling` |
-| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment` or `dockcalendar` |
-| `subject` | the aggregate root id: `appointmentId` for `dockappointment` events, `siteId` for `dockcalendar` events |
+| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment`, `dockcalendar` or `carrier` |
+| `subject` | the aggregate root id: `appointmentId` for `dockappointment` events, `siteId` for `dockcalendar` events, the SCAC for `carrier` events |
 | `time` | the instant the fact happened, UTC |
 | `datacontenttype` | `application/json` |
 | `dataschema` | `urn:warehouse:dock-scheduling:events:<EventName>:v1` on the integration topic, `urn:warehouse:dock-scheduling:analytics:<EventName>:v1` on its analytics twin |
 | Kafka topic | `warehouse.dock-scheduling.events` for integration events, `warehouse.dock-scheduling.analytics` for events marked `analytics only` |
-| Kafka key | the same id as `subject`, so one appointment's (or one site calendar's) events stay in order on one partition |
+| Kafka key | the same id as `subject`, so one appointment's (or one site calendar's, or one carrier's) events stay in order on one partition |
 | Payload case | `snake_case` |
 | `version` | in `data` of every event except `DockAppointmentAtRisk`: the aggregate `version` (starts at 1, plus 1 per accepted change); a reader applies only a `version` greater than the stored one |
 
@@ -62,6 +63,18 @@ one table in `internal/domain/standards`, and an event with no honest mapping ca
 | `DoorClosureScheduled` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `from`, `to`, `reason`, `version` | `ScheduleDoorClosure` | `yard-management` |
 | `DoorClosureLifted` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `version` | `LiftDoorClosure` | `yard-management` |
 | `DoorOperatingHoursDeclared` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared` | analytics only | `site_id`, `door_code`, `operating_hours`, `version` | `DeclareOperatingHours` | analytics only |
+
+### Carrier events (key `scac`, ADR 0012)
+
+| Event | Full `type` | Stream | `data` fields | Producing command | Consumers |
+| --- | --- | --- | --- | --- | --- |
+| `CarrierRegistered` | `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered` | integration + analytics twin | `scac`, `name`, `usdot`, `mc`, `status`, `reason`, `suspended_at`, `version` (the full snapshot after the change; absent optionals are `null`) | `RegisterCarrier` (first registration), `UpdateCarrier` (only when the data changed) | `yard-management` |
+| `CarrierSuspended` | `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended` | integration + analytics twin | `scac`, `reason`, `suspended_at`, `version` | `SuspendCarrier` | `yard-management` |
+| `CarrierReinstated` | `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated` | integration + analytics twin | `scac`, `reinstated_at`, `version` | `ReinstateCarrier` | `yard-management` |
+
+A carrier fact raised by an MCP write also carries an optional `initiated_by` object in `data` (`via` `mcp`; `proposal_id`,
+`approved_by` and `agent_id` when supplied); a REST write carries none. `yard-management` folds the three into its `CarrierView` copy
+(its `internal/adapters/inbound/kafka/dock_scheduling_consumer.go` on `origin/develop`); no other context consumes them.
 
 Stream: `integration + analytics twin` is `warehouse.dock-scheduling.events` plus the same message on
 `warehouse.dock-scheduling.analytics`; `analytics only` is the analytics topic alone.

@@ -37,11 +37,11 @@ Behaviour common to every consumer (`internal/adapters/inbound/kafka/kafka.go`, 
 
 ## Downstreams (consume this service's events)
 
-Topic `warehouse.dock-scheduling.events`, key = appointment id (site id for calendar events), source `/warehouse/dock-scheduling`, dataschema `urn:warehouse:dock-scheduling:events:<Event>:v1`. Published through the transactional outbox, at-least-once, the CloudEvents id persisted at enqueue time.
+Topic `warehouse.dock-scheduling.events`, key = appointment id (site id for calendar events, SCAC for carrier events), source `/warehouse/dock-scheduling`, dataschema `urn:warehouse:dock-scheduling:events:<Event>:v1`. Published through the transactional outbox, at-least-once, the CloudEvents id persisted at enqueue time.
 
 | Downstream | Event types it consumes (from its own consumer code on `origin/develop`) | Use |
 | --- | --- | --- |
-| `yard-management` | `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentNoShow`, `DoorClosureScheduled`, `DoorClosureLifted` | Expected arrivals and the door calendar; a no-show frees the open move. |
+| `yard-management` | `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentNoShow`, `DoorClosureScheduled`, `DoorClosureLifted`, `CarrierRegistered`, `CarrierSuspended`, `CarrierReinstated` | Expected arrivals and the door calendar; a no-show frees the open move; the carrier events feed its `CarrierView` copy of the carrier registry (ADR 0012). |
 | `inbound-receiving` | `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentDoorReassigned` | Its `appointments` local copy (its ADR 0019): validates a receipt's appointment and stamps the physical door. |
 | `warehouse-planning` | `DockAppointmentBooked`, `DockAppointmentRescheduled`, `DockAppointmentCancelled`, `DockAppointmentNoShow` (per the yard context map; its ADR 0020) | Inbound labour demand per site, replacing the old inbound-receiving source. |
 | `outbound-shipping` | `DockAppointmentBooked` | Outbound appointment awareness. |
