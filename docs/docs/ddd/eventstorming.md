@@ -45,8 +45,8 @@ flowchart TB
     A1["DockAppointment<br/>DoorSchedule.<br/>CheckNoOverlap"]:::agg
     E1["DockAppointment-<br/>Booked"]:::evt
     E2["DockAppointment-<br/>Rescheduled<br/>DockAppointment-<br/>Cancelled"]:::evt
-    X1["yard-management<br/>warehouse-planning<br/>inbound-receiving"]:::ext
-    X2["yard-management<br/>warehouse-planning"]:::ext
+    X1["yard-management<br/>warehouse-planning<br/>inbound-receiving<br/>outbound-shipping"]:::ext
+    X2["yard-management<br/>warehouse-planning<br/>inbound-receiving"]:::ext
     H1["H1 site-side cancel?<br/>H2 door change on<br/>reschedule?"]:::hot
     CS --> C1 --> A1
     CS --> C2 --> A1
@@ -62,8 +62,10 @@ Source: `internal/domain/dockappointment/appointment.go`, `internal/domain/docka
 Omitted: the refusals (`ErrInvalidDoorCode`, `ErrInvalidCarrier`,
 `ErrInvalidWindow`, `ErrWindowInPast`, `ErrUnknownDoor`,
 `ErrDoorFlowMismatch`, `ErrDoorDoubleBooked`, `ErrDoorUnavailable`,
-`ErrUnknownAsn`, `ErrMissingOutboundRef`). `DockAppointmentCancelled` also
-reaches `inbound-receiving`; `DockAppointmentRescheduled` does not.
+`ErrUnknownAsn`, `ErrMissingOutboundRef`). The consumer nodes follow the
+neighbours' own consumer code: `inbound-receiving` reads `DockAppointmentBooked`,
+`DockAppointmentRescheduled` and `DockAppointmentCancelled`; `outbound-shipping`
+reads `DockAppointmentBooked` only.
 
 ## 2. Arrival at the gate and a different door
 

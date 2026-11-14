@@ -35,3 +35,9 @@ Data fields per event are the AsyncAPI schemas in `apis/asyncapi.yaml` and the g
 location code.
 
 Consumed types are catalogued in ADR 0003. A breaking payload change is a new `.v2` type with a `:v2` dataschema.
+
+## Addendum 2026-11-13: current state
+
+Two consumer cells in the table above are out of date, read from each sibling's `origin/develop`: `DockAppointmentBooked` is also
+consumed by outbound-shipping (`internal/adapters/inbound/kafka/dock_yard_consumers.go`, handler at line 52), and `DockAppointmentRescheduled` is also consumed by inbound-receiving
+(`internal/adapters/inbound/kafka/dock_appointment_consumer.go`, `case` at line 165, its appointments copy).

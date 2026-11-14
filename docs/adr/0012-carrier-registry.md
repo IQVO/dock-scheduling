@@ -181,3 +181,12 @@ and the down migration drops only that table, so an older binary keeps working a
   too and the projector ignores them.
 - The MCP surface grows to fourteen tools, which the fleet's authority tests pin.
 - A breaking change to a carrier payload is a new `.v2` type with a `:v2` dataschema, on both streams (ADR 0004).
+
+## Addendum 2026-11-13: current state
+
+The "Consumers: none yet" paragraph and the matching Consequences bullet are out of date. yard-management consumes `CarrierRegistered`,
+`CarrierSuspended` and `CarrierReinstated` from `warehouse.dock-scheduling.events` into its `CarrierView` copy (its
+`internal/adapters/inbound/kafka/dock_scheduling_consumer.go`, type constants at lines 33-35 and handlers at lines 212-214 on its
+`origin/develop`; its change YF-1, PR #21). No other sibling consumes them. For that reason the three integration messages in
+`apis/asyncapi.yaml` no longer carry `x-no-consumer-reason` (PR #23); the analytics twins still do, because only this service's
+projector reads them.

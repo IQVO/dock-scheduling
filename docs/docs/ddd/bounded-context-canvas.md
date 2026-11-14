@@ -199,6 +199,9 @@ and this page's reading for the others.
 | `inbound-receiving` | `DockAppointmentDoorReassigned` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentDoorReassigned` | OHS + PL (reading); integration since 2026-11-09 (service ADR 0010) |
 | `yard-management` | `DoorClosureScheduled` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | Customer/Supplier |
 | `yard-management` | `DoorClosureLifted` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted` | Customer/Supplier |
+| `yard-management` | `CarrierRegistered` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered` | Customer/Supplier |
+| `yard-management` | `CarrierSuspended` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended` | Customer/Supplier |
+| `yard-management` | `CarrierReinstated` | Event | Kafka `warehouse.dock-scheduling.events`, `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated` | Customer/Supplier |
 | analytics only | `DockAppointmentCheckedIn` | Event | Kafka `warehouse.dock-scheduling.analytics`, `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCheckedIn` | PL, no in-org consumer |
 | analytics only | `DockAppointmentCompleted` | Event | Kafka `warehouse.dock-scheduling.analytics`, `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCompleted` | PL, no in-org consumer |
 | analytics only | `DockAppointmentAtRisk` | Event | Kafka `warehouse.dock-scheduling.analytics`, `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentAtRisk` | PL, no in-org consumer |
