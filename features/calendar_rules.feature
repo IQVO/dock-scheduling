@@ -334,6 +334,11 @@ Feature: The calendar, its settings and the copies it reads obey their documente
     When a GET request is sent to "/doors/D-BOTH/availability?from=2030-01-07T06:00:00Z&to=2030-01-21T06:00:00Z"
     Then the response status is 200
 
+  Scenario: A minimum length of exactly 240 minutes is accepted
+    When a GET request is sent to "/doors/D-BOTH/availability?from=@06:00&to=@14:00&minutes=240"
+    Then the response status is 200
+    And the response list "freeWindows" has 1 items
+
   Scenario Outline: An availability query that is empty, reversed, too wide, unknown or aimed at an unknown door is refused
     When a GET request is sent to "<path>"
     Then the response is the problem <slug> with status <status>
