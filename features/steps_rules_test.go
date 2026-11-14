@@ -79,7 +79,11 @@ func registerRequestSteps(sc *godog.ScenarioContext, w *world) {
 		return nil
 	})
 	sc.Step(`^a POST request with no Idempotency-Key is sent to "([^"]*)" with the JSON body (.+)$`, w.sendWithoutKey)
-	sc.Step(`^the next request carries the Idempotency-Key "([^"]+)"$`, func(key string) error { w.nextKey = key; return nil })
+	sc.Step(`^the next request carries the Idempotency-Key "([^"]+)"$`, func(key string) error {
+		expanded, err := w.expand(key)
+		w.nextKey = expanded
+		return err
+	})
 	sc.Step(`^the next request carries If-Match (.+)$`, func(value string) error { w.ifMatch = value; return nil })
 }
 
@@ -230,7 +234,7 @@ func registerFactAssertions(sc *godog.ScenarioContext, w *world) {
 		}
 		return nil
 	})
-	sc.Step(`^the latest (Door\w+) fact carries (\w+) (.+)$`, func(event, field, literal string) error {
+	sc.Step(`^the latest (Dock\w+|Door\w+) fact carries (\w+) (.+)$`, func(event, field, literal string) error {
 		wire := w.store.PublishedWire()
 		for i := len(wire) - 1; i >= 0; i-- {
 			if wire[i].Event != event {
