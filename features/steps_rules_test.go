@@ -37,13 +37,19 @@ func registerRulesSteps(sc *godog.ScenarioContext, w *world) {
 var (
 	timeToken  = regexp.MustCompile(`@(\d\d:\d\d)`)
 	aliasToken = regexp.MustCompile(`\{(closure:)?([A-Za-z][A-Za-z0-9 _-]*)\}`)
+	textToken  = regexp.MustCompile(`\{text:(\d+)\}`)
 )
 
 // expand resolves the tokens a step may carry: {alias} is the id of a booked
-// appointment, {closure:alias} the id of a scheduled closure and @HH:MM an
-// instant of the scenario day.
+// appointment, {closure:alias} the id of a scheduled closure, @HH:MM an
+// instant of the scenario day and {text:N} a run of N letters (to walk a
+// length cap without pasting a 101-character name into a feature).
 func (w *world) expand(s string) (string, error) {
 	var missing error
+	s = textToken.ReplaceAllStringFunc(s, func(m string) string {
+		n, _ := strconv.Atoi(textToken.FindStringSubmatch(m)[1])
+		return strings.Repeat("A", n)
+	})
 	s = aliasToken.ReplaceAllStringFunc(s, func(m string) string {
 		sub := aliasToken.FindStringSubmatch(m)
 		ids := w.appointments
@@ -73,6 +79,8 @@ func registerRequestSteps(sc *godog.ScenarioContext, w *world) {
 		return nil
 	})
 	sc.Step(`^a POST request with no Idempotency-Key is sent to "([^"]*)" with the JSON body (.+)$`, w.sendWithoutKey)
+	sc.Step(`^the next request carries the Idempotency-Key "([^"]+)"$`, func(key string) error { w.nextKey = key; return nil })
+	sc.Step(`^the next request carries If-Match (.+)$`, func(value string) error { w.ifMatch = value; return nil })
 }
 
 // sendJSON sends the request through the world's usual call (a POST gets a
