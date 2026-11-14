@@ -195,4 +195,5 @@ func InitializeScenario(sc *godog.ScenarioContext) {
 	registerCarrierSteps(sc, w)
 	registerStandardsSteps(sc, w)
 	registerAssertions(sc, w)
+	registerRulesSteps(sc, w)
 }
