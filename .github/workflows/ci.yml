@@ -137,6 +137,128 @@ jobs:
       - name: The gate's own tests
         run: python3 scripts/harness/test_pinned_contract_gate.py
 
+  # Producer breaking-change gate: a PR that touches apis/** must not break
+  # the contracts downstream repos pin. Five consumers pin this repo's
+  # apis/asyncapi.yaml@develop byte-for-byte (warehouse-docs
+  # network/model/contract-edges.json): exception-management,
+  # inbound-receiving, outbound-shipping, warehouse-planning and
+  # yard-management, all on warehouse.dock-scheduling.events. The REST specs
+  # go through oasdiff breaking against the PR's base; the AsyncAPI spec goes
+  # through scripts/harness/asyncapi_breaking.py (oasdiff has no AsyncAPI
+  # mode): a removed channel or message, a removed/renamed required data
+  # field, or a narrowed data-field type or enum fails the job naming the
+  # consumers. The spec's own envelope rule is additive-only - a breaking
+  # payload change is a new .v2 dataschema, never a mutation.
+  # ============================================================
+  # CLASSIFICATION: CONTRACT TESTING (spec breaking changes)
+  # ============================================================
+  spec-breaking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0      # the base spec copies come from git show
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.13"
+      - name: Install oasdiff (pinned)
+        run: go install github.com/oasdiff/oasdiff@v1.38.0
+      - name: Install PyYAML (hash-pinned)
+        run: python3 -m pip install --require-hashes -r .github/requirements/chart-tests.txt
+      - name: Breaking changes vs the base branch (REST oasdiff, AsyncAPI harness gate)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git diff --name-only "$BASE_SHA" HEAD -- apis/)" ]; then
+            echo "No apis/ changes in this PR - the breaking-change gate is skipped."
+            exit 0
+          fi
+          status=0
+          mkdir -p base/apis
+          for f in openapi.yaml openapi-reports.yaml asyncapi.yaml; do
+            if git cat-file -e "$BASE_SHA:apis/$f" 2>/dev/null; then
+              git show "$BASE_SHA:apis/$f" > "base/apis/$f"
+            else
+              echo "apis/$f is new in this PR (no base copy) - nothing to compare."
+            fi
+          done
+          for f in openapi.yaml openapi-reports.yaml; do
+            if [ ! -f "base/apis/$f" ]; then continue; fi
+            echo "::group::oasdiff breaking apis/$f"
+            if ! oasdiff breaking --fail-on ERR "base/apis/$f" "apis/$f"; then
+              status=1
+              echo "::error::apis/$f carries breaking REST changes vs the base branch."
+            fi
+            echo "::endgroup::"
+          done
+          if [ -f base/apis/asyncapi.yaml ]; then
+            if ! python3 scripts/harness/asyncapi_breaking.py base/apis/asyncapi.yaml apis/asyncapi.yaml; then
+              status=1
+            fi
+          fi
+          exit "$status"
+      - name: The asyncapi gate's own tests
+        run: python3 scripts/harness/test_asyncapi_breaking.py
+
+  # Property-based contract testing: boots the REAL cmd/api (Postgres + Kafka
+  # service containers - this service has no in-memory mode, fleet decision
+  # 2026-10-17) and generates valid AND invalid requests for every operation
+  # in apis/openapi.yaml, asserting response conformance (status codes,
+  # content types, response schemas; positive data accepted, negative data
+  # rejected). Catches spec/implementation drift the example-based suites
+  # (unit, httptest, BDD) cannot see. Same invocation as scripts/contract-test.sh.
+  # ============================================================
+  # CLASSIFICATION: CONTRACT TESTING (OpenAPI / Schemathesis)
+  # ============================================================
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dock
+          POSTGRES_PASSWORD: dock
+          POSTGRES_DB: dock
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      kafka:
+        image: confluentinc/confluent-local:7.6.1
+        ports: ["9092:9092"]
+        options: >-
+          --health-cmd "kafka-topics --bootstrap-server localhost:29092 --list"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 20
+          --health-start-period 10s
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.13"
+      - name: Install Schemathesis (pinned)
+        run: python3 -m pip install --require-hashes -r .github/requirements/schemathesis.txt
+      - name: Contract tests (Schemathesis over apis/openapi.yaml)
+        env:
+          DATABASE_URL: "postgres://dock:dock@localhost:5432/dock?sslmode=disable"
+          KAFKA_BROKERS: "localhost:9092"
+        run: ./scripts/contract-test.sh
+
   # ============================================================
   # CLASSIFICATION: UNIT TESTING
   # ============================================================
