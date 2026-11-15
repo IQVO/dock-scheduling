@@ -115,6 +115,28 @@ jobs:
           version: v2.14.0
           args: --timeout=5m --enable-only revive --issues-exit-code=0
 
+  # Pinned producer contracts: every copy in contracts/pinned.json must byte-equal
+  # its producer's develop. The pinned-contract tests validate against those
+  # copies, so a copy nobody refreshes keeps the tests green while the producer
+  # moves on. The producer repos are readable with the workflow's own token; a
+  # producer that cannot be read fails the job (exit 2), never passes it.
+  # ============================================================
+  # CLASSIFICATION: LINTERS & STATIC ANALYSIS (pinned producer contracts)
+  # ============================================================
+  pinned-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Pins equal the producer's develop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/harness/pinned_contract_gate.py
+      - name: The gate's own tests
+        run: python3 scripts/harness/test_pinned_contract_gate.py
+
   # ============================================================
   # CLASSIFICATION: UNIT TESTING
   # ============================================================
