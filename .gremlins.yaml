@@ -28,14 +28,21 @@ unleash:
     # tagless-switch-under-reports pitfall before assuming a low number
     # means missing tests.
     #
-    # Measured per domain package (gremlins v0.6.0, workers 1, timeout
-    # coefficient 30), one `gremlins unleash ./internal/domain/<pkg>` each:
-    #   internal/domain/dockappointment  efficacy 100.00%  mutant-coverage 100.00%  (106 killed / 0 lived)
-    #   internal/domain/dockcalendar     efficacy 100.00%  mutant-coverage 100.00%  (104 killed / 0 lived)
-    #   internal/domain/shared           efficacy 100.00%  mutant-coverage 100.00%  (29 killed / 0 lived)
-    #   internal/domain/standards        efficacy 100.00%  mutant-coverage 100.00%  (7 killed / 0 lived)
+    # Measured 2026-11-15 (gremlins v0.6.0, workers 1, timeout coefficient 30) with
+    # `make mutation-full` and with one `gremlins unleash ./internal/domain/<pkg>` each
+    # (the loop `make mutation` and the mutation-fast CI job run), killed/lived/not-covered:
+    #   internal/domain/carrier          35/0/0   efficacy 100.00%  mutant-coverage 100.00%
+    #   internal/domain/dockappointment 103/0/0   efficacy 100.00%  mutant-coverage 100.00%
+    #   internal/domain/dockcalendar    104/0/0   efficacy 100.00%  mutant-coverage 100.00%
+    #   internal/domain/shared           29/0/0   efficacy 100.00%  mutant-coverage 100.00%
+    #   internal/domain/standards         7/0/0   efficacy 100.00%  mutant-coverage 100.00%
     # The thresholds sit strictly below every measurement (gremlins fails at
-    # <= threshold). `make mutation` and the `mutation-fast` CI job loop over
-    # EVERY one of these packages.
-    efficacy: "95"
-    mutant-coverage: "95"
+    # <= threshold), so 99 holds the packages at 100.00%.
+    #
+    # NOTE: the values are UNQUOTED on purpose. gremlins v0.6.0 reads the threshold
+    # with a float64/int type assertion, so a quoted string ("95") is read as 0 and the
+    # gate is silently DISABLED. Unquoted numbers are enforced (measured on
+    # node-topology: efficacy: 100 on a 100% package fails with "below
+    # efficacy-threshold"; "100" passes).
+    efficacy: 99
+    mutant-coverage: 99
