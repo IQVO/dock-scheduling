@@ -113,7 +113,7 @@ curl -s -X POST localhost:8080/no-show-sweeps -H "Idempotency-Key: $(uuidgen)"
 
 A refusal is an RFC 7807 problem, for example `409 door-double-booked` or `422 window-in-past`; the full list is in [Troubleshooting](/docs/operations/troubleshooting) and the [API reference](/docs/api-reference). Behind Kong the same API is under `/api/dock-scheduling`.
 
-The behaviour these calls rely on is specified by the godog features: `features/door_booking.feature` (no double booking across directions, flow mismatch, half-open windows), `door_calendar.feature` (hours, closures, settings), `asn_single_appointment.feature`, `yard_facts.feature` (arrival, docking, release applied from yard events), `no_show_sweep.feature` and `rest_contract.feature`.
+The behaviour these calls rely on is specified by the godog features: `features/door_booking.feature` (no double booking across directions, flow mismatch, half-open windows), `door_calendar.feature` (hours, closures, settings), `asn_single_appointment.feature`, `yard_facts.feature` (arrival, docking, release applied from yard events), `no_show_sweep.feature` and `rest_contract.feature`; the `booking_rules`, `lifecycle_rules`, `yard_rules` and `calendar_rules` features pin the rules of the Dock Scheduling documentation.
 
 ## MCP and reports
 
