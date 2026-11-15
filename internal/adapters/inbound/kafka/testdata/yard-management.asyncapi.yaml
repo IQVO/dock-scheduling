@@ -79,7 +79,11 @@ channels:
     address: warehouse.yard-management.analytics
     description: 'This service''s analytics stream, written by the SAME outbox pass: the thirteen integration types again (same
       id, byte-identical payload, analytics dataschema) plus the ten analytics-only types. Consumed ONLY by this service''s
-      own projector.'
+      own projector. A consumed message whose payload can never be applied, or that the analytics store deterministically
+      rejects, is dead-lettered at once to `warehouse.yard-management.analytics.dlq` (the fleet `<topic>.dlq` convention)
+      and the offset committed past it; the dead letter is the untouched message (same key and value) with the headers
+      `x-dlq-source-topic` (`warehouse.yard-management.analytics`) and `x-dlq-cause` (the refusal reason) added. A transient
+      handler error is never dead-lettered: the same message is retried with capped backoff.'
     messages:
       VisitCheckedInAnalytics:
         $ref: '#/components/messages/VisitCheckedInAnalytics'
