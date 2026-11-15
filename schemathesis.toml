@@ -61,10 +61,12 @@ include-operation-id-regex = "^(listAppointments|listCarriers|getCarrier|getDock
 checks.positive_data_acceptance.enabled = false
 
 # reportEta: the free-text `source` may not contain NUL; the server answers
-# 400 malformed-request-body. liftDoorClosure: the Idempotency-Key header must
-# be 1..128 printable ASCII characters, which the header schema does not say.
+# 400 malformed-request-body. liftDoorClosure / runNoShowSweep: the
+# Idempotency-Key header must be 1..128 printable ASCII characters, which the
+# header schema does not say (the other Idempotency-Key operations are already
+# in the groups above).
 [[operations]]
-include-operation-id-regex = "^(reportEta|liftDoorClosure)$"
+include-operation-id-regex = "^(reportEta|liftDoorClosure|runNoShowSweep)$"
 checks.positive_data_acceptance.enabled = false
 
 # --- negative_data_rejection off -------------------------------------------

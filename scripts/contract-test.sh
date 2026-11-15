@@ -37,6 +37,7 @@ SCHEMATHESIS_VERSION="4.28.0"
 PORT="${CONTRACT_PORT:-18086}"
 BASE_URL="http://127.0.0.1:${PORT}"
 MAX_EXAMPLES="${CONTRACT_MAX_EXAMPLES:-100}"
+# Extra `st run` flags, e.g. CONTRACT_ST_ARGS="--seed 7" to reproduce a CI failure.
 
 if ! command -v st >/dev/null 2>&1; then
   echo "schemathesis (st) is not installed (or not on PATH)."
@@ -111,4 +112,5 @@ st run apis/openapi.yaml \
   --url "${BASE_URL}" \
   --max-examples "${MAX_EXAMPLES}" \
   --workers 4 \
-  --exclude-checks unsupported_method
+  --exclude-checks unsupported_method \
+  ${CONTRACT_ST_ARGS:-}
