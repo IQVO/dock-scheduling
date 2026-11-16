@@ -87,9 +87,7 @@ func NewRouter(s *Server) http.Handler {
 	// The reports (GET /reports/*) are served by cmd/reports (NewReportsRouter).
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeProblem(w, r, notFoundResource, "no such path") })
-	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problem{http.StatusMethodNotAllowed, "method-not-allowed", "Method not allowed"}, "the method is not supported on this path")
-	})
+	r.MethodNotAllowed(methodNotAllowedFor(r))
 	return r
 }
 

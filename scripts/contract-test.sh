@@ -96,12 +96,6 @@ for _ in $(seq 1 300); do
 done
 curl -sf "${BASE_URL}/readyz" >/dev/null # fail loudly if it never became ready
 
-# Excluded CHECK — unsupported_method: chi answers an undocumented method with
-# 405 + the problem-json body but no RFC 9110 `Allow` header, so the check
-# fails on every path while the actual 405 contract (the body) is pinned by
-# TestNotFoundAndMethodNotAllowedAreProblems
-# (internal/adapters/inbound/http/server_test.go).
-#
 # EVERY operation is exercised (22/22, including the stateful phase). The
 # per-operation relaxations of the positive_data_acceptance /
 # negative_data_rejection checks live, with a reason each, in
@@ -112,5 +106,4 @@ st run apis/openapi.yaml \
   --url "${BASE_URL}" \
   --max-examples "${MAX_EXAMPLES}" \
   --workers 4 \
-  --exclude-checks unsupported_method \
   ${CONTRACT_ST_ARGS:-}
