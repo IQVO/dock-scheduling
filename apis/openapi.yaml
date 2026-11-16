@@ -55,7 +55,7 @@ tags:
     description: Liveness, readiness and metrics probes.
 
 paths:
-  /appointments:
+  /appointments-canary:
     post:
       operationId: bookAppointment
       summary: Book an appointment
