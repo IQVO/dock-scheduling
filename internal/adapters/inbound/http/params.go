@@ -79,7 +79,7 @@ func ifMatchVersion(r *http.Request) (int64, error) {
 	raw = strings.Trim(raw, `"`)
 	v, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || v < 1 {
-		return 0, fmt.Errorf("%w: If-Match must be the ETag of the appointment", errInvalidIfMatch)
+		return 0, fmt.Errorf("%w: If-Match must be the ETag of the resource", errInvalidIfMatch)
 	}
 	return v, nil
 }

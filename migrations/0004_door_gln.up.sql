@@ -1,0 +1,12 @@
+-- 0004_door_gln.up.sql: the GS1 GLN of a dock door (ADR 0013). Additive: one
+-- nullable column, nothing existing is touched, so an older binary keeps
+-- working against the migrated database (it neither reads nor writes it).
+--
+-- doors is the local copy of facility-layout's Dock slots (ADR 0003). Since
+-- its ADR 0045 a slot may carry an optional GS1 Global Location Number
+-- (13 digits, mod-10 check digit), which this context publishes as
+-- `read_point_gln` on the facts that happened at that door. NULL means the
+-- door has none (every door registered before the field existed). The shape is
+-- checked here; the check digit is checked by the consumer, which stores NULL
+-- for a GLN it cannot validate instead of refusing the slot.
+ALTER TABLE doors ADD COLUMN gln TEXT COLLATE "C" CHECK (gln ~ '^[0-9]{13}$');

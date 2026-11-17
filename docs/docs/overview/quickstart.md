@@ -60,7 +60,7 @@ export CPT_CONSUMER_GROUP=dock-scheduling-cpt
 go run ./cmd/api
 ```
 
-It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is built on develop and registered in `warehouse-infra` develop, but not yet applied to the cluster (no pod runs yet).
+It applies the embedded migrations at boot, then serves on `:8080`. The other binaries (`cmd/mcp`, `cmd/projector`, `cmd/reports`, `cmd/relay`, `cmd/sweep`) are started the same way with their own variables: see [Configuration](/docs/operations/configuration). In the cluster the Helm chart `charts/dock-scheduling` renders all of it; see the [Runbook](/docs/operations/runbook). The service is applied to the k3s cluster at `v0.1.2` (api only; read-only check on 2026-11-10, see [What runs on the k3s cluster](/docs/operations/runbook#what-runs-on-the-k3s-cluster)): in the cluster MCP, the dedicated relay, the analytics binaries and the sweep CronJob are switched off in `warehouse-infra`.
 
 ## First calls
 
@@ -113,7 +113,7 @@ curl -s -X POST localhost:8080/no-show-sweeps -H "Idempotency-Key: $(uuidgen)"
 
 A refusal is an RFC 7807 problem, for example `409 door-double-booked` or `422 window-in-past`; the full list is in [Troubleshooting](/docs/operations/troubleshooting) and the [API reference](/docs/api-reference). Behind Kong the same API is under `/api/dock-scheduling`.
 
-The behaviour these calls rely on is specified by the godog features: `features/door_booking.feature` (no double booking across directions, flow mismatch, half-open windows), `door_calendar.feature` (hours, closures, settings), `asn_single_appointment.feature`, `yard_facts.feature` (arrival, docking, release applied from yard events), `no_show_sweep.feature` and `rest_contract.feature`.
+The behaviour these calls rely on is specified by the godog features: `features/door_booking.feature` (no double booking across directions, flow mismatch, half-open windows), `door_calendar.feature` (hours, closures, settings), `asn_single_appointment.feature`, `yard_facts.feature` (arrival, docking, release applied from yard events), `no_show_sweep.feature` and `rest_contract.feature`; the `booking_rules`, `lifecycle_rules`, `yard_rules` and `calendar_rules` features pin the rules of the Dock Scheduling documentation.
 
 ## MCP and reports
 

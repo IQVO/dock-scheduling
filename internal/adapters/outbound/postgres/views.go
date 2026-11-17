@@ -26,16 +26,16 @@ func NewDoorStore(pool *pgxpool.Pool) *DoorStore { return &DoorStore{pool: pool}
 // Door implements ports.DoorView: nil when the door is unknown or its zone
 // (hence site) has not arrived yet.
 func (s *DoorStore) Door(ctx context.Context, code shared.DoorCode) (*dockappointment.Door, error) {
-	var site, flow string
+	var site, flow, gln string
 	err := queryFor(ctx, s.pool).QueryRow(ctx, `
-		SELECT z.site_code, d.dock_flow FROM doors d JOIN zones z ON z.zone_id = d.zone_id WHERE d.door_code = $1`, string(code)).Scan(&site, &flow)
+		SELECT z.site_code, d.dock_flow, COALESCE(d.gln, '') FROM doors d JOIN zones z ON z.zone_id = d.zone_id WHERE d.door_code = $1`, string(code)).Scan(&site, &flow, &gln)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil //nolint:nilnil // the port's contract: nil door = not bookable
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read door %s: %w", code, err)
 	}
-	return &dockappointment.Door{Code: code, Site: shared.SiteID(site), Flow: shared.DockFlow(flow)}, nil
+	return &dockappointment.Door{Code: code, Site: shared.SiteID(site), Flow: shared.DockFlow(flow), GLN: shared.GLN(gln)}, nil
 }
 
 // UpsertZone implements ports.DoorView.
@@ -50,10 +50,15 @@ func (s *DoorStore) UpsertZone(ctx context.Context, zoneID, siteCode string) err
 }
 
 // UpsertDoor implements ports.DoorView.
-func (s *DoorStore) UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow) error {
+func (s *DoorStore) UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow, gln string) error {
+	var glnArg *string
+	if gln != "" {
+		glnArg = &gln
+	}
 	_, err := queryFor(ctx, s.pool).Exec(ctx, `
-		INSERT INTO doors (door_code, zone_id, dock_flow) VALUES ($1, $2, $3)
-		ON CONFLICT (door_code) DO UPDATE SET zone_id = EXCLUDED.zone_id, dock_flow = EXCLUDED.dock_flow`, code, zoneID, string(flow))
+		INSERT INTO doors (door_code, zone_id, dock_flow, gln) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (door_code) DO UPDATE SET zone_id = EXCLUDED.zone_id, dock_flow = EXCLUDED.dock_flow, gln = COALESCE(EXCLUDED.gln, doors.gln)`,
+		code, zoneID, string(flow), glnArg)
 	if err != nil {
 		return fmt.Errorf("upsert door %s: %w", code, err)
 	}

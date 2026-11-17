@@ -16,13 +16,16 @@ const tracerName = "github.com/claudioed/dock-scheduling/internal/adapters/inbou
 // registerTools adds every tool to the server, each wrapped so its handler
 // runs inside an OTel span named "mcp.tool <name>".
 //
-// The charter asks for intent-level tools, not one per endpoint: these nine
-// are exactly the read and booking verbs of decision D-6; calendar settings,
+// The charter asks for intent-level tools, not one per endpoint: the first nine
+// are exactly the read and booking verbs of decision D-6 (calendar settings,
 // closures, hours and the no-show sweep are planner/cron operations and stay
-// on REST.
+// on REST); the carrier registry adds five (ADR 0012): list_carriers and
+// get_carrier (L1), register_carrier, suspend_carrier and reinstate_carrier (L3).
+// Changing a registered carrier's data (UpdateCarrier) stays on REST.
 func (d Deps) registerTools(server *mcp.Server) {
 	d.registerReadTools(server)
 	d.registerWriteTools(server)
+	d.registerCarrierTools(server)
 }
 
 func (d Deps) registerReadTools(server *mcp.Server) {
@@ -81,7 +84,8 @@ func (d Deps) registerWriteTools(server *mcp.Server) {
 		Description: "Book a dock door window for one carrier visit. INBOUND needs at least one known, not cancelled asnNumbers entry; OUTBOUND needs a known cptId " +
 			"or shipmentRefs. The window is half-open [windowStart, windowEnd), on the site's slot granularity, not in the past, inside the door's " +
 			"operating hours and outside its closures, and may not overlap another BOOKED or CHECKED_IN appointment of the door. Refused with a typed " +
-			"error otherwise (door-double-booked, door-unavailable, unknown-asn, asn-already-scheduled, window-in-past, ...). Check get_door_availability first. " +
+			"error otherwise (door-double-booked, door-unavailable, unknown-asn, asn-already-scheduled, window-in-past, carrier-suspended, ...). Check get_door_availability first. " +
+			"A carrierScac that is in the carrier registry and SUSPENDED is refused (carrier-suspended); an ACTIVE or unregistered SCAC, or none, is accepted as before. " +
 			"Needs an idempotencyKey: retry with the same key and arguments to get the same answer, never a second booking.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &additive, IdempotentHint: idempotent},
 		Meta:        authorityMeta(authorityL3),
@@ -90,7 +94,7 @@ func (d Deps) registerWriteTools(server *mcp.Server) {
 	addTool(server, &mcp.Tool{
 		Name: "reschedule_appointment",
 		Description: "Move a BOOKED appointment to a new window and/or door (omit doorCode to keep the door). The same checks as a booking apply to the new " +
-			"door and window. Pass expectedVersion (from get_appointment) to refuse the change if someone else changed the appointment meanwhile " +
+			"door and window (a suspended carrier's appointment cannot be moved: carrier-suspended). Pass expectedVersion (from get_appointment) to refuse the change if someone else changed the appointment meanwhile " +
 			"(precondition-failed). Needs an idempotencyKey.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &destructive, IdempotentHint: idempotent},
 		Meta:        authorityMeta(authorityL3),

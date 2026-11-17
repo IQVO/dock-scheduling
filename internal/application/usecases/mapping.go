@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"github.com/claudioed/dock-scheduling/internal/application/views"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 )
@@ -59,4 +60,16 @@ func toSpanViews(spans []dockcalendar.Span) []views.SpanView {
 		out = append(out, views.SpanView{Start: s.Start, End: s.End, Kind: s.Kind, Ref: s.Ref})
 	}
 	return out
+}
+
+func toCarrierView(c *carrier.Carrier) views.CarrierView {
+	id := c.Identity()
+	v := views.CarrierView{
+		SCAC: c.SCAC().String(), Name: id.Name(), USDOT: id.USDOT(), MC: id.MC(), Status: string(c.Status()),
+		SuspensionReason: c.SuspensionReason(), Version: c.Version(), CreatedAt: c.CreatedAt(), UpdatedAt: c.UpdatedAt(),
+	}
+	if t := c.SuspendedAt(); !t.IsZero() {
+		v.SuspendedAt = &t
+	}
+	return v
 }

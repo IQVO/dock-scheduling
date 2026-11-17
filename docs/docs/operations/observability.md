@@ -2,12 +2,12 @@
 id: observability
 title: Observability
 sidebar_label: Observability
-description: "What dock-scheduling exposes for operators: Prometheus metrics, MCP tool spans, structured logs, probes, and the dashboard and alert rules registered in warehouse-infra develop (not applied to the cluster yet)."
+description: "What dock-scheduling exposes for operators: Prometheus metrics, MCP tool spans, structured logs, probes, and the dashboard and alert rules registered in warehouse-infra develop (the api runs on k3s; the other components are switched off)."
 ---
 
 # Observability
 
-Status: **built on develop, registered in warehouse-infra develop, not applied to the cluster.** `warehouse-infra` `origin/develop` carries a dashboard and alert rules for `dock-scheduling` (PR 193, commit `b4b827e`; see [Dashboards and alerts](#dashboards-and-alerts)), but no pod of the service runs yet, so nothing below is a stack that already shows data: it is what the binaries emit and what the registered dashboard and rules will read once the application is applied.
+Status: **built on develop, registered in warehouse-infra develop and applied to the k3s cluster at `v0.1.2` (api only).** `warehouse-infra` `origin/develop` carries a dashboard and alert rules for `dock-scheduling` (PR 193, commit `b4b827e`; see [Dashboards and alerts](#dashboards-and-alerts)). Read-only on 2026-11-10 the `dock-scheduling` pod is Ready with 0 restarts, but MCP, the projector, the reports and the dedicated relay are switched off in infra (commit `89c9592`), so only what `cmd/api` emits can exist on the cluster: the `cmd/mcp` and `cmd/reports` `/metrics` endpoints and the projector have no running process. Whether Prometheus scrapes the api, whether the dashboard and rules are loaded, and whether any panel shows data were not checked.
 
 Source: `internal/adapters/outbound/telemetry/telemetry.go`, `internal/adapters/inbound/http/*`, `internal/adapters/inbound/mcp/tools.go`, `cmd/*`.
 
@@ -21,11 +21,11 @@ There is **no OpenTelemetry metrics or trace SDK** in the code (`go.mod` has the
 |---|---|---|---|---|
 | `dock_scheduling_http_requests_total` | counter | requests | `method`, `route`, `status` | Finished HTTP requests. `route` is the chi route pattern (for example `/appointments/{appointmentId}`) and `unmatched` for no match, never the raw path, so cardinality stays bounded. |
 | `dock_scheduling_http_request_duration_seconds` | histogram (default Prometheus buckets) | seconds | `method`, `route` | Request duration. |
-| `dock_scheduling_ignored_facts_total` | counter | facts | `reason` | Yard, ASN or legacy facts the policies deliberately changed nothing for. `reason` is one of `unknown_appointment`, `terminal_appointment`, `site_mismatch`, `unknown_door`, `already_applied`, `not_legacy_import`. |
+| `dock_scheduling_ignored_facts_total` | counter | facts | `reason` | Yard or ASN facts the policies deliberately changed nothing for. `reason` is one of `unknown_appointment`, `terminal_appointment`, `site_mismatch`, `unknown_door`, `already_applied` (`not_legacy_import` was removed with the legacy importer, ADR 0011). |
 | `dock_scheduling_implicit_arrivals_total` | counter | arrivals | none | Door releases applied to a `BOOKED` appointment (arrival implied, no `TrailerDocked` or `VisitCheckedIn` seen first). |
 | `go_*`, `process_*` | Go runtime and process collectors | | | Standard client_golang collectors. |
 
-Reading the ignored-facts counter: a steady trickle of `already_applied` is normal (redelivery). A growing `unknown_door` means the facility consumer has not delivered the door yet (or the importer was enabled too early). A growing `unknown_appointment` means yard facts cite appointments this service does not hold.
+Reading the ignored-facts counter: a steady trickle of `already_applied` is normal (redelivery). A growing `unknown_door` means the facility consumer has not delivered the door yet. A growing `unknown_appointment` means yard facts cite appointments this service does not hold.
 
 Useful queries (not shipped as rules): `sum by (route, status) (rate(dock_scheduling_http_requests_total[5m]))`; `histogram_quantile(0.95, sum by (le, route) (rate(dock_scheduling_http_request_duration_seconds_bucket[5m])))`; `increase(dock_scheduling_ignored_facts_total[1h])` by `reason`.
 
@@ -64,7 +64,7 @@ See the [runbook](/docs/operations/runbook#probes-what-readiness-waits-for). In 
 
 ## Dashboards and alerts
 
-Registered in `warehouse-infra` `origin/develop` by PR 193 (commit `b4b827e`), not applied to the cluster: no `dock-scheduling` pod exists, so no panel has data and no rule can fire yet.
+Registered in `warehouse-infra` `origin/develop` by PR 193 (commit `b4b827e`). The api pod runs (read-only on 2026-11-10), so the api and Kong-route panels can have data; the MCP and reports panels select Kong routes (`-mcp`, `-reports`) and processes that do not exist while those components are off, so expect them empty. Whether the dashboard and the rules are loaded in the observability stack was not checked.
 
 **Dashboard.** `terraform/dashboards/contexts/dock-scheduling.json` (title "Warehouse — Dock Scheduling", uid `warehouse-dock-scheduling`, generated by `scripts/gen-context-dashboards.py`). Four rows:
 

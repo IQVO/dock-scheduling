@@ -5,6 +5,8 @@ unchanged. Code: `internal/adapters/inbound/mcp`, `cmd/mcp`, and two new applica
 `idempotent.go`. Implements decision D-6 of the yard-management contracts and the fleet's Agentic Standard v2 (authority levels, stateless
 transport, complete surface, attributable writes). Shape reference: inbound-receiving ADR 0005 / 0018 (read-only there; this context owns the
 door calendar, so it also takes bookings) and workforce-management (attributed write).
+Amended in part by ADR 0012: five carrier registry tools (`list_carriers`, `get_carrier`, `register_carrier`, `suspend_carrier`,
+`reinstate_carrier`) bring the surface from nine to fourteen tools; the rest of this ADR stands.
 
 ## Decisions
 

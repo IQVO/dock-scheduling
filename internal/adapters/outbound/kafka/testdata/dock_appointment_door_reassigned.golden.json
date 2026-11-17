@@ -12,6 +12,7 @@
     "site_id": "WH1",
     "from_door_code": "WH1-DOCK-IN-01",
     "to_door_code": "WH1-DOCK-IN-02",
-    "version": 3
+    "version": 3,
+    "read_point_gln": "4012345000009"
   }
 }

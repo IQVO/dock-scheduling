@@ -56,17 +56,17 @@ func newEnv(t *testing.T) *env {
 	s := memory.NewStore()
 	e := &env{t: t, store: s, metrics: &memory.Metrics{}, clock: &fakeClock{now: t0}, ids: &fakeIDs{}}
 	e.svc = usecases.New(usecases.Deps{
-		Appointments: s.Appointments(), Calendars: s.Calendars(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
+		Appointments: s.Appointments(), Calendars: s.Calendars(), Carriers: s.Carriers(), Doors: s.Doors(), Asns: s.Asns(), Cutoffs: s.Cutoffs(),
 		Processed: s, Events: s, Metrics: e.metrics, IDs: e.ids, Clock: e.clock, UoW: s,
 	})
 	ctx := context.Background()
 	must(t, s.Doors().UpsertZone(ctx, "zone-dock", "WH1"))
 	must(t, s.Doors().UpsertZone(ctx, "zone-dock2", "WH2"))
-	must(t, s.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound))
-	must(t, s.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound))
-	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth))
-	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH2", "zone-dock", shared.FlowBoth))
-	must(t, s.Doors().UpsertDoor(ctx, "D-OTHER", "zone-dock2", shared.FlowBoth))
+	must(t, s.Doors().UpsertDoor(ctx, "D-IN", "zone-dock", shared.FlowInbound, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-OUT", "zone-dock", shared.FlowOutbound, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH", "zone-dock", shared.FlowBoth, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-BOTH2", "zone-dock", shared.FlowBoth, ""))
+	must(t, s.Doors().UpsertDoor(ctx, "D-OTHER", "zone-dock2", shared.FlowBoth, ""))
 	must(t, s.Asns().Register(ctx, "ASN-1", at8))
 	must(t, s.Asns().Register(ctx, "ASN-2", at8))
 	must(t, s.Asns().Register(ctx, "ASN-3", at8))

@@ -17,13 +17,12 @@ import (
 )
 
 // The consumer groups of the real wiring tests: the environment of a
-// deployment (ADR 0009). The legacy importer is ON so all five consumers run.
+// deployment (ADR 0009). All four consumers run.
 const (
 	yardGroup     = "it-yard"
 	facilityGroup = "it-facility"
 	asnGroup      = "it-asn"
 	cptGroup      = "it-cpt"
-	legacyGroup   = "it-legacy"
 
 	door2 = "WH1-DOCK-IN-02"
 )
@@ -37,14 +36,13 @@ const (
 	producerInbound  = "inbound-receiving"
 )
 
-// consumerEnv sets the five *_CONSUMER_GROUP variables.
+// consumerEnv sets the four *_CONSUMER_GROUP variables.
 func consumerEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("YARD_CONSUMER_GROUP", yardGroup)
 	t.Setenv("FACILITY_CONSUMER_GROUP", facilityGroup)
 	t.Setenv("ASN_CONSUMER_GROUP", asnGroup)
 	t.Setenv("CPT_CONSUMER_GROUP", cptGroup)
-	t.Setenv("DOCK_LEGACY_IMPORT_CONSUMER_GROUP", legacyGroup)
 }
 
 // createConsumedTopics creates every topic the service reads, and its dead
@@ -88,6 +86,17 @@ func publishDoor(t *testing.T, code, zoneID, flow string) {
 	t.Helper()
 	publish(t, inboundkafka.FacilityTopic, producerFacility, inboundkafka.TypeLocationSlotRegistered, code,
 		map[string]any{"locationCode": code, "zoneId": zoneID, "locationType": "DOCK_DOOR", "role": "Dock", "dockFlow": flow})
+}
+
+// doorGLN is the GS1 GLN facility-layout gives `door` in this journey (its ADR 0045):
+// it reaches the doors copy through the real facility consumer and comes back out
+// as read_point_gln on the facts at that door (ADR 0013).
+const doorGLN = "4006381333931"
+
+func publishDoorWithGLN(t *testing.T, code, zoneID, flow, gln string) {
+	t.Helper()
+	publish(t, inboundkafka.FacilityTopic, producerFacility, inboundkafka.TypeLocationSlotRegistered, code,
+		map[string]any{"locationCode": code, "zoneId": zoneID, "locationType": "DOCK_DOOR", "role": "Dock", "dockFlow": flow, "gln": gln})
 }
 
 func publishAsn(t *testing.T, number string) {
@@ -192,7 +201,7 @@ func nested(t *testing.T, v map[string]any, key string) map[string]any {
 // booking on it is refused as an unknown door, and it resolves once the zone
 // lands.
 func (j *journey) referenceData(t *testing.T) {
-	publishDoor(t, door, "zone-WH1-in", "Inbound")
+	publishDoorWithGLN(t, door, "zone-WH1-in", "Inbound", doorGLN)
 	waitCommitted(t, facilityGroup, inboundkafka.FacilityTopic, 1)
 	if zones, doors := count(t, j.databaseURL, `SELECT count(*) FROM zones`), count(t, j.databaseURL, `SELECT count(*) FROM doors`); zones != 0 || doors != 1 {
 		t.Fatalf("after the slot alone: zones = %d, doors = %d, want 0 and 1 (held pending)", zones, doors)
@@ -224,7 +233,7 @@ func (j *journey) referenceData(t *testing.T) {
 }
 
 // facts walks the appointment lifecycle driven ONLY by yard facts on the
-// producer's topic, plus the out-of-order, ignored, dead-lettered, ASN and legacy
+// producer's topic, plus the out-of-order, ignored, dead-lettered and ASN
 // cases.
 func (j *journey) facts(t *testing.T) {
 	base := j.windowStart.Add(24 * time.Hour)
@@ -312,21 +321,6 @@ func (j *journey) facts(t *testing.T) {
 		j.asnCancelled = id
 	})
 
-	t.Run("the strangler stage A importer takes a legacy appointment once", func(t *testing.T) {
-		id := "appt-7e57ab1e-0000-4000-8000-00000000a001"
-		legacy := map[string]any{
-			"appointment_id": id, "door_code": door2, "carrier": "Legacy Freight",
-			"window_start": rfc(base.Add(8 * time.Hour)), "window_end": rfc(base.Add(9 * time.Hour)), "asn_numbers": []string{"ASN-IT-6"},
-		}
-		publish(t, inboundkafka.InboundReceivingTopic, producerInbound, inboundkafka.TypeLegacyBooked, id, legacy)
-		publish(t, inboundkafka.InboundReceivingTopic, producerInbound, inboundkafka.TypeLegacyBooked, id, legacy) // a second event id: no second import
-		v := j.waitState(t, id, "BOOKED")
-		if v["provenance"] != "legacy-import" || v["siteId"] != "WH1" || v["version"] != float64(1) {
-			t.Errorf("legacy view = %v, want legacy-import at WH1, version 1", v)
-		}
-		j.legacy = id
-	})
-
 	t.Run("a trailer docked at another door reassigns the appointment (ActualDoorWins)", func(t *testing.T) {
 		id := j.bookAt(t, "it-fact-f", door2, base.Add(10*time.Hour), "ASN-IT-7")
 		trailerDocked(t, "trl-it-f", door, id, base.Add(10*time.Hour+5*time.Minute))
@@ -382,25 +376,17 @@ func (j *journey) factEvents(t *testing.T) {
 	events := byType(outboundkafka.TopicEvents)
 	has(events, "DockAppointmentCancelled", j.turnedAway, map[string]any{"reason": "TURNED_AWAY", "site_id": "WH1"})
 	has(events, "DockAppointmentCancelled", j.asnCancelled, map[string]any{"reason": "ASN_CANCELLED"})
-	has(events, "DockAppointmentBooked", j.legacy, map[string]any{"provenance": "legacy-import", "direction": "INBOUND"})
-	legacyBooked := 0
-	for _, data := range events["DockAppointmentBooked"] {
-		if data["appointment_id"] == j.legacy {
-			legacyBooked++
-		}
-	}
-	if legacyBooked != 1 {
-		t.Errorf("DockAppointmentBooked for the legacy appointment = %d, want exactly 1 (imported once)", legacyBooked)
-	}
 	if len(events["DockAppointmentCheckedIn"]) != 0 || len(events["DockAppointmentCompleted"]) != 0 {
 		t.Errorf("analytics-only events leaked onto the events topic: %v", events)
 	}
 	// ADR 0010: the door reassignment is an integration event, on both topics.
-	reassigned := map[string]any{"site_id": "WH1", "from_door_code": door2, "to_door_code": door, "version": float64(2)}
+	reassigned := map[string]any{"site_id": "WH1", "from_door_code": door2, "to_door_code": door, "version": float64(2), "read_point_gln": doorGLN}
 	has(events, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
 	analytics := byType(outboundkafka.TopicAnalytics)
 	has(analytics, "DockAppointmentDoorReassigned", j.reassigned, reassigned)
-	has(analytics, "DockAppointmentCheckedIn", j.completed, map[string]any{"arrival_status": "ON_TIME", "visit_id": "visit-it-b"})
+	has(analytics, "DockAppointmentCheckedIn", j.completed, map[string]any{
+		"arrival_status": "ON_TIME", "visit_id": "visit-it-b", "x12_status": "X1", "cbv_biz_step": "urn:epcglobal:cbv:bizstep:arriving",
+	})
 	has(analytics, "DockAppointmentCompleted", j.completed, map[string]any{"door_code": door2})
 	has(analytics, "DockAppointmentCompleted", j.implicit, nil)
 	has(analytics, "DockAppointmentCancelled", j.turnedAway, map[string]any{"reason": "TURNED_AWAY"})

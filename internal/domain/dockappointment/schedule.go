@@ -8,6 +8,9 @@ type Door struct {
 	Code shared.DoorCode
 	Site shared.SiteID
 	Flow shared.DockFlow
+	// GLN is the door's GS1 Global Location Number as facility-layout
+	// registered it, or "" (ADR 0013). It is only carried, never a booking rule.
+	GLN shared.GLN
 }
 
 // DoorSchedule is the domain service guarding the cross-aggregate door rules.

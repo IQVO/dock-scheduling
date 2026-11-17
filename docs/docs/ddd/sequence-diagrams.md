@@ -408,46 +408,10 @@ Source: `internal/domain/dockappointment/appointment.go`, `internal/domain/docka
 
 Omitted: the idempotency replay (diagram 1). A rerun selects only what still qualifies.
 
-## 9. ImportLegacyAppointment
+## 9. ImportLegacyAppointment (removed)
 
-Policy `LegacyImport` (strangler stage A), on `inbound-receiving` `DockAppointment*` events; off when its group env is unset.
-
-```mermaid
-%%{init: {"sequence": {"wrap": true, "width": 120, "actorMargin": 24, "messageMargin": 28, "boxMargin": 6, "noteMargin": 6, "mirrorActors": false}}}%%
-sequenceDiagram
-    autonumber
-    participant H as kafka<br/>consumer
-    participant U as use case
-    participant A as Dock<br/>Appointment
-    participant R as repositories<br/>and views
-    participant O as outbox and<br/>relay to Kafka
-    H->>U: legacy<br/>DockAppointmentBooked<br/>event id, door, window
-    U->>O: processed_events contains<br/>event id?
-    alt already processed
-        U-->>H: ack, no effect
-    else new
-        U->>R: legacy_appointment_id<br/>already imported?
-        alt imported
-            U->>O: insert processed_events<br/>row
-            U-->>H: ack, import once
-        else not yet
-            U->>R: DoorView for the site of<br/>the door
-            U->>A: ImportLegacyAppointment<br/>provenance legacy-import,<br/>direction INBOUND
-            A-->>U: appointment
-            Note over U,O: one transaction
-            U->>R: insert appointment
-            U->>O: insert<br/>DockAppointmentBooked
-            U->>O: insert processed_events<br/>row
-            U-->>H: ack
-        end
-    end
-    Note over O: after commit the relay<br/>publishes to warehouse.<br/>dock-scheduling.events
-
-```
-
-Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/inbound/kafka/legacy_import_consumer.go`.
-
-Omitted: which invariants an import enforces, how the legacy check-in, cancel and complete events are applied and whether the import raises `DockAppointmentBooked` are settled by decision D-2: the import enforces no invariant, later legacy events move only `legacy-import` appointments, and `DockAppointmentBooked` is raised; the diagram shows that.
+The policy `LegacyImport` (the strangler stage A importer of `inbound-receiving`'s `DockAppointment*` events) was removed in
+[ADR 0011](/docs/adr/0011-legacy-importer-removed). The diagram is gone; the number stays so the later diagrams keep theirs.
 
 ## 10. DeclareOperatingHours
 

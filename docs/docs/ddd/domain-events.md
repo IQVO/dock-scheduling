@@ -8,8 +8,9 @@ description: "Every event Dock Scheduling publishes and consumes, with full Clou
 # Domain Events
 
 Every event this context publishes and consumes, from
-`contexts[dock-scheduling].publishes` and `.consumes`. The envelope follows
-`conventions.cloudevents` in the design model.
+`contexts[dock-scheduling].publishes` and `.consumes`; the three carrier events
+(ADR 0012) are read from `apis/asyncapi.yaml` and `internal/domain/carrier/events.go`.
+The envelope follows `conventions.cloudevents` in the design model.
 
 ## Envelope
 
@@ -18,13 +19,13 @@ Every event this context publishes and consumes, from
 | `specversion` | `1.0` (structured JSON mode) |
 | `id` | a UUID minted once, when the event is written to the outbox; a redelivery carries the same `id` |
 | `source` | `/warehouse/dock-scheduling` |
-| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment` or `dockcalendar` |
-| `subject` | the aggregate root id: `appointmentId` for `dockappointment` events, `siteId` for `dockcalendar` events |
+| `type` | `com.warehouse.wms.dock-scheduling.<entity>.<EventName>`, entity `dockappointment`, `dockcalendar` or `carrier` |
+| `subject` | the aggregate root id: `appointmentId` for `dockappointment` events, `siteId` for `dockcalendar` events, the SCAC for `carrier` events |
 | `time` | the instant the fact happened, UTC |
 | `datacontenttype` | `application/json` |
 | `dataschema` | `urn:warehouse:dock-scheduling:events:<EventName>:v1` on the integration topic, `urn:warehouse:dock-scheduling:analytics:<EventName>:v1` on its analytics twin |
 | Kafka topic | `warehouse.dock-scheduling.events` for integration events, `warehouse.dock-scheduling.analytics` for events marked `analytics only` |
-| Kafka key | the same id as `subject`, so one appointment's (or one site calendar's) events stay in order on one partition |
+| Kafka key | the same id as `subject`, so one appointment's (or one site calendar's, or one carrier's) events stay in order on one partition |
 | Payload case | `snake_case` |
 | `version` | in `data` of every event except `DockAppointmentAtRisk`: the aggregate `version` (starts at 1, plus 1 per accepted change); a reader applies only a `version` greater than the stored one |
 
@@ -35,7 +36,10 @@ to `warehouse.dock-scheduling.analytics`; integration events go to
 `data`, to `warehouse.dock-scheduling.analytics` (`conventions.analytics_rule`; the
 service's ADR 0004 and, for `DockAppointmentDoorReassigned`, ADR 0010).
 In the code the AsyncAPI is version 2.6.0 with one channel per topic: seven
-integration types on the events channel, all eleven on the analytics channel.
+integration types on the events channel, all eleven on the analytics channel (ADR 0012 adds three carrier events to both: ten and fourteen).
+Since ADR 0013 every appointment fact (and every door closure) can also carry the optional `x12_status`, `cbv_biz_step` and
+`read_point_gln` fields, the standard meaning of the fact (ANSI X12 214 code, GS1 CBV business step, GS1 GLN of the door); the mapping is
+one table in `internal/domain/standards`, and an event with no honest mapping carries none of the first two.
 
 ## Published
 
@@ -43,7 +47,7 @@ integration types on the events channel, all eleven on the analytics channel.
 
 | Event | Full `type` | Stream | `data` fields | Producing command | Consumers |
 | --- | --- | --- | --- | --- | --- |
-| `DockAppointmentBooked` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` | integration + analytics twin | `appointment_id`, `site_id`, `direction`, `door_code`, `carrier`, `carrier_scac`, `window_start`, `window_end`, `asn_numbers`, `cpt_id`, `shipment_refs`, `expected_seal_number`, `arrival_tolerance_minutes`, `provenance`, `version` | `BookAppointment`; `ImportLegacyAppointment` (policy `LegacyImport`, provenance `legacy-import`) | `yard-management`, `warehouse-planning`, `inbound-receiving`, `outbound-shipping` |
+| `DockAppointmentBooked` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` | integration + analytics twin | `appointment_id`, `site_id`, `direction`, `door_code`, `carrier`, `carrier_scac`, `window_start`, `window_end`, `asn_numbers`, `cpt_id`, `shipment_refs`, `expected_seal_number`, `arrival_tolerance_minutes`, `provenance`, `version` | `BookAppointment` | `yard-management`, `warehouse-planning`, `inbound-receiving`, `outbound-shipping` |
 | `DockAppointmentRescheduled` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `previous_door_code`, `window_start`, `window_end`, `previous_window_start`, `previous_window_end`, `arrival_tolerance_minutes`, `version` | `RescheduleAppointment` (window and/or door; carries `previous_door_code`) | `yard-management`, `warehouse-planning`, `inbound-receiving` |
 | `DockAppointmentCancelled` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `reason`, `version` | `CancelAppointment` (carrier or planner request; policies `CancelOnVisitRejected` with `TURNED_AWAY` and `CancelWhenAllAsnsCancelled` with `ASN_CANCELLED`) | `yard-management`, `warehouse-planning`, `inbound-receiving` |
 | `DockAppointmentNoShow` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow` | integration + analytics twin | `appointment_id`, `site_id`, `door_code`, `direction`, `carrier_scac`, `window_end`, `version` | `MarkNoShow` (policy `NoShowSweep`) | `yard-management`, `warehouse-planning`, `exception-management` |
@@ -59,6 +63,18 @@ integration types on the events channel, all eleven on the analytics channel.
 | `DoorClosureScheduled` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `from`, `to`, `reason`, `version` | `ScheduleDoorClosure` | `yard-management` |
 | `DoorClosureLifted` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted` | integration + analytics twin | `site_id`, `closure_id`, `door_code`, `version` | `LiftDoorClosure` | `yard-management` |
 | `DoorOperatingHoursDeclared` | `com.warehouse.wms.dock-scheduling.dockcalendar.DoorOperatingHoursDeclared` | analytics only | `site_id`, `door_code`, `operating_hours`, `version` | `DeclareOperatingHours` | analytics only |
+
+### Carrier events (key `scac`, ADR 0012)
+
+| Event | Full `type` | Stream | `data` fields | Producing command | Consumers |
+| --- | --- | --- | --- | --- | --- |
+| `CarrierRegistered` | `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered` | integration + analytics twin | `scac`, `name`, `usdot`, `mc`, `status`, `reason`, `suspended_at`, `version` (the full snapshot after the change; absent optionals are `null`) | `RegisterCarrier` (first registration), `UpdateCarrier` (only when the data changed) | `yard-management` |
+| `CarrierSuspended` | `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended` | integration + analytics twin | `scac`, `reason`, `suspended_at`, `version` | `SuspendCarrier` | `yard-management` |
+| `CarrierReinstated` | `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated` | integration + analytics twin | `scac`, `reinstated_at`, `version` | `ReinstateCarrier` | `yard-management` |
+
+A carrier fact raised by an MCP write also carries an optional `initiated_by` object in `data` (`via` `mcp`; `proposal_id`,
+`approved_by` and `agent_id` when supplied); a REST write carries none. `yard-management` folds the three into its `CarrierView` copy
+(its `internal/adapters/inbound/kafka/dock_scheduling_consumer.go` on `origin/develop`); no other context consumes them.
 
 Stream: `integration + analytics twin` is `warehouse.dock-scheduling.events` plus the same message on
 `warehouse.dock-scheduling.analytics`; `analytics only` is the analytics topic alone.
@@ -112,7 +128,7 @@ in the same transaction as the effect) and dispatches on the full `type` string,
 suffix (`conventions.integration_rules`). A fact that is valid but changes nothing (an
 unknown or terminal appointment, a site mismatch, an unknown door) is counted in
 `dock_scheduling_ignored_facts_total` and committed; a payload that can never be applied
-is dead-lettered to `<topic>.dlq`. The five consumers and their environment variables
+is dead-lettered to `<topic>.dlq`. The four consumers and their environment variables
 are in the service's ADR 0009. The full types: `yard-management` events are
 `com.warehouse.wms.yard-management.<entity>.<EventName>` (entity `yardvisit` or `trailer`),
 `process-path-management` is in the `wes` tier
@@ -131,13 +147,9 @@ are read from each producer's AsyncAPI.
 | `inbound-receiving` | `ASNRegistered`, `warehouse.inbound-receiving.events` | `asn_number`, `expected_arrival`, `lines` | Inserts the ASN into `AsnView` (`asns`) | Upsert on `asn_number`; a cancelled ASN stays cancelled |
 | `inbound-receiving` | `ASNCancelled`, `warehouse.inbound-receiving.events` | `asn_number` | Marks the ASN cancelled in `AsnView`; policy `CancelWhenAllAsnsCancelled` cancels an `INBOUND` `BOOKED` appointment whose ASNs are all cancelled, reason `ASN_CANCELLED` | A cancelled appointment is skipped |
 | `process-path-management` | `CPTScheduleChanged`, `warehouse.process-path-management.events` | `site_id`, `timezone`, `cutoffs` | Stores the schedule in `CutoffView` (`cutoff_schedules`, `cutoffs`). Phase 2, not built: policy `PickupFromCutoffs` would keep `OUTBOUND` appointments; today no appointment is created from it (D-3) | The whole schedule of a site replaces the previous one; the event has no version, the inbox claim makes a replay a no-op |
-| `inbound-receiving` (stage A to D) | `DockAppointmentBooked`, `warehouse.inbound-receiving.events` | `appointment_id`, window, door | Policy `LegacyImport`: `ImportLegacyAppointment`, once per appointment (provenance `legacy-import`, direction `INBOUND`, version 1, `carrier_scac` null); raises `DockAppointmentBooked`. An unknown door skips the event and counts it | One import per appointment id; no window, hours, closure, overlap or ASN check (D-2) |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCheckedIn`, `warehouse.inbound-receiving.events` | `appointment_id` | Moves only a `legacy-import` appointment to `CHECKED_IN`, classified with the site's tolerance like any gate arrival | Other provenance, unknown ids: ignored and counted |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCancelled`, `warehouse.inbound-receiving.events` | `appointment_id` | Cancels only a `legacy-import` appointment, reason `CARRIER_REQUEST` | Same |
-| `inbound-receiving` (stage A to D) | `DockAppointmentCompleted`, `warehouse.inbound-receiving.events` | `appointment_id` | Completes only a `legacy-import` appointment | Same |
 
-The legacy importer reads the same topic as the ASN consumer under its own group
-(`DOCK_LEGACY_IMPORT_CONSUMER_GROUP`) and is **off** when that variable is unset.
+The legacy importer that once read this topic under its own group was removed in ADR 0011: this
+context consumes no `inbound-receiving` `dockappointment.*` type.
 
 Source: `internal/application/usecases/facts.go`, `internal/application/usecases/yard.go`, `internal/application/usecases/change.go`, `internal/adapters/inbound/kafka/yard_consumer.go`, `internal/adapters/inbound/kafka/facility_consumer.go`, `internal/adapters/inbound/kafka/asn_consumer.go`, `internal/adapters/inbound/kafka/cutoff_consumer.go`, `internal/adapters/outbound/kafka/encoder.go`, `apis/asyncapi.yaml`, `internal/application/ports/ports.go`, `migrations/0001_dock_scheduling.up.sql`.
 

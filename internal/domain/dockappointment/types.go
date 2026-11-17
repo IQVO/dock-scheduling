@@ -195,7 +195,7 @@ func NewWindow(start, end time.Time, r Rules) (Window, error) {
 	return w, nil
 }
 
-// newBareWindow only requires end after start (rehydration and legacy imports).
+// newBareWindow only requires end after start (rehydration).
 func newBareWindow(start, end time.Time) (Window, error) {
 	if !end.After(start) {
 		return Window{}, ErrInvalidWindow

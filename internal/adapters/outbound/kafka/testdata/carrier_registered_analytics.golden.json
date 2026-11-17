@@ -1,0 +1,20 @@
+{
+  "specversion": "1.0",
+  "id": "7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered",
+  "subject": "ACMF",
+  "time": "2026-11-10T14:00:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierRegistered:v1",
+  "data": {
+    "scac": "ACMF",
+    "name": "ACME Freight",
+    "usdot": "1234567",
+    "mc": "MC654321",
+    "status": "ACTIVE",
+    "reason": null,
+    "suspended_at": null,
+    "version": 1
+  }
+}

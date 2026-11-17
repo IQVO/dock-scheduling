@@ -61,7 +61,6 @@ Errors are `application/problem+json`; the `type` is `https://errors.dock-schedu
 | Partition stuck, repeated `handling failed; retrying the same message` | A transient failure (Postgres, lost commit) retried forever by design. | `error`, `partition`, `offset`, `attempt`. | Fix the dependency; it resumes. |
 | Messages appearing on `<topic>.dlq` | Handled type that can never apply. | Headers `x-dlq-cause`, `x-dlq-source-topic`. | Fix the producer; replay. |
 | Arrival or release not applied | The fact cites an unknown or terminal appointment, or the wrong site. | `dock_scheduling_ignored_facts_total{reason}` (`unknown_appointment`, `terminal_appointment`, `site_mismatch`). | Expected for stale facts; otherwise check the yard feed. |
-| Legacy appointments not imported | `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` is unset (importer off), or the doors were not known yet (`unknown_door`). | Env and the counter. | Set the group once the facility consumer caught up. |
 
 ## No-show sweep
 

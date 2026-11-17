@@ -24,6 +24,8 @@
     "expected_seal_number": "SEAL-77120",
     "arrival_tolerance_minutes": 15,
     "provenance": "native",
-    "version": 1
+    "version": 1,
+    "x12_status": "AB",
+    "read_point_gln": "4012345000009"
   }
 }

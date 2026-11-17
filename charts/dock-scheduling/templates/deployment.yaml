@@ -95,12 +95,6 @@ spec:
               value: {{ .Values.config.asnConsumerGroup | quote }}
             - name: CPT_CONSUMER_GROUP
               value: {{ .Values.config.cptConsumerGroup | quote }}
-            # The strangler stage A importer (ADR 0003): unset = off, so the
-            # value is only rendered when set.
-            {{- with .Values.config.dockLegacyImportConsumerGroup }}
-            - name: DOCK_LEGACY_IMPORT_CONSUMER_GROUP
-              value: {{ . | quote }}
-            {{- end }}
             - name: ENVIRONMENT
               value: {{ .Values.environment | quote }}
             - name: SERVICE_VERSION

@@ -26,13 +26,13 @@ COVERAGE_THRESHOLD := 90
 # settings. Pick your richest, most behaviourally-dense aggregate here —
 # not necessarily the biggest package, the one with the most branching
 # domain logic (see HARNESS.md's mutation-testing section).
-MUTATION_FAST_PKG  := ./internal/domain/dockappointment ./internal/domain/dockcalendar ./internal/domain/shared
+MUTATION_FAST_PKG  := ./internal/domain/carrier ./internal/domain/dockappointment ./internal/domain/dockcalendar ./internal/domain/shared ./internal/domain/standards
 # The exhaustive scheduled run — kept in sync with the `mutation` CI job.
 MUTATION_FULL_PKG  := ./internal/domain
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build vet fmt fmt-check lint test coverage integration bdd arch-test mutation mutation-full vuln check check-all
+.PHONY: help build vet fmt fmt-check lint test coverage integration bdd arch-test mutation mutation-full vuln contract check check-all
 
 help:
 	@echo "dock-scheduling — local quality gate (targets mirror .github/workflows/ci.yml)"
@@ -48,6 +48,7 @@ help:
 	@echo "  integration    go test -tags=integration ./... -race -count=1"
 	@echo "                 (testcontainers boots its own Postgres/Kafka; needs only Docker; not in check)"
 	@echo "  bdd            go test ./... -run TestFeatures -v — godog/Gherkin acceptance"
+	@echo "  contract       scripts/contract-test.sh — Schemathesis vs apis/openapi.yaml (needs st, Postgres, Kafka)"
 	@echo "  arch-test      go test ./internal/architecture/... -v — hexagonal fitness"
 	@echo "  mutation       gremlins on $(MUTATION_FAST_PKG) — the fast blocking subset"
 	@echo "  mutation-full  gremlins on $(MUTATION_FULL_PKG) — the exhaustive scheduled run"
@@ -144,6 +145,13 @@ vuln:
 		exit 1; \
 	fi
 	$(GOVULNCHECK) ./...
+
+# Property-based contract tests against apis/openapi.yaml — mirrors the
+# `contract` CI job. Not part of check/check-all: needs Python tooling (st) on
+# PATH plus a Postgres (DATABASE_URL) and a Kafka broker (KAFKA_BROKERS) —
+# see the header of scripts/contract-test.sh.
+contract:
+	./scripts/contract-test.sh
 
 # The fast self-correction loop: run this after every change, before committing.
 check: fmt-check vet build lint test

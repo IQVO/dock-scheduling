@@ -2,8 +2,7 @@
 // into the real adapters (Postgres through pgx, Kafka through the outbox
 // relay and the inbound consumers), the adapters into the use cases and the
 // use cases into the REST router. There is no in-memory mode, no log sink and
-// no relay or consumer that is off (fleet decision 2026-10-17; only the legacy
-// importer is optional, by design).
+// no relay or consumer that is off (fleet decision 2026-10-17).
 //
 // Environment:
 //
@@ -15,7 +14,6 @@
 //	FACILITY_CONSUMER_GROUP     group of the facility-layout consumer (REQUIRED)
 //	ASN_CONSUMER_GROUP          group of the inbound-receiving ASN consumer (REQUIRED)
 //	CPT_CONSUMER_GROUP          group of the process-path-management CPT consumer (REQUIRED)
-//	DOCK_LEGACY_IMPORT_CONSUMER_GROUP  group of the strangler stage A importer (optional: unset = off)
 //	OUTBOX_RELAY_INTERVAL       relay poll interval (Go duration or seconds, default 1s)
 //	OUTBOX_BATCH_SIZE           rows per relay pass (default 100)
 //	OUTBOX_MAX_ATTEMPTS         failures before the relay excludes a row (default 20, 0 = unlimited)

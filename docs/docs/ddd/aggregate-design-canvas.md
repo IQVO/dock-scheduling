@@ -62,8 +62,7 @@ stateDiagram-v2
 
 Source: `internal/domain/dockappointment/appointment.go`, `internal/domain/dockappointment/commands.go`, `internal/domain/dockappointment/events.go`.
 
-Omitted: the creation arrow `[*] --> BOOKED` is `BookAppointment` and
-`ImportLegacyAppointment`; the design model lists them as commands but not as
+Omitted: the creation arrow `[*] --> BOOKED` is `BookAppointment` (the design model also listed `ImportLegacyAppointment`, removed in ADR 0011); the design model lists the commands but not as
 transitions, because a transition needs a from-state. `ReportEta` and `ReassignDoor` change
 data and bump the version, not the state (a reassignment is also legal from `CHECKED_IN`).
 `COMPLETED`, `CANCELLED` and `NO_SHOW` have no outgoing transition and are terminal
@@ -95,7 +94,7 @@ passes them to the aggregate or to the domain service; the design model
 fixes that the overlap check is a domain service under a per-door advisory lock; in the code a
 GiST exclusion constraint on `(door_code, window)` is the database backstop (a losing writer
 fails with `23P01`, mapped to `ErrDoorDoubleBooked`) and rows whose door was set by a physical
-fact (`door_override`) and legacy imports are exempt from it.
+fact (`door_override`) and legacy imports (none can be created since ADR 0011) are exempt from it.
 `ErrDoorDoubleBooked` is deliberately **not** applied by `ReassignDoor`
 (policy `ActualDoorWins`): the physical fact wins, and any later appointment
 that now overlaps is flagged instead.
@@ -130,10 +129,9 @@ that now overlaps is flagged instead.
   `[cutoff - pickup_lead, cutoff)`. `PickupDoorRule` and `pickup_lead` are not
   defined elsewhere in the design model. In the code (decision D-3) only the schedule is stored; no
   appointment is created from it and there is no `PickupDoorRule`.
-- **`LegacyImport`** (strangler stage A): consume `inbound-receiving`
-  `DockAppointment*` events and import each appointment once (provenance
-  `legacy-import`, direction `INBOUND`, version 1); off when
-  `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` is unset.
+- **`LegacyImport`** (strangler stage A): removed in ADR 0011. It consumed `inbound-receiving`
+  `DockAppointment*` events and imported each appointment once (provenance `legacy-import`);
+  the provenance value stays as a historical, published enum value.
 
 ### 6. Handled Commands
 
@@ -147,13 +145,12 @@ that now overlaps is flagged instead.
 | `ReassignDoor` | policy `ActualDoorWins` (no REST route) | none (changes the door; from `BOOKED` or `CHECKED_IN`) |
 | `RecordDoorRelease` | policy `CompleteOnDoorRelease` (no REST route) | `CHECKED_IN` or `BOOKED` to `COMPLETED` |
 | `MarkNoShow` | Scheduler (cron), REST `POST /no-show-sweeps` | `BOOKED` to `NO_SHOW` |
-| `ImportLegacyAppointment` | policy `LegacyImport` (no REST route) | creates the appointment |
 
 ### 7. Created Events
 
 | Event | Raised when | Topic | Full CloudEvents type |
 | --- | --- | --- | --- |
-| `DockAppointmentBooked` | `BookAppointment` succeeds (and `ImportLegacyAppointment`) | `.events` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` |
+| `DockAppointmentBooked` | `BookAppointment` succeeds | `.events` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked` |
 | `DockAppointmentRescheduled` | `RescheduleAppointment` succeeds | `.events` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled` |
 | `DockAppointmentCancelled` | `CancelAppointment` succeeds | `.events` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled` |
 | `DockAppointmentNoShow` | `MarkNoShow` succeeds | `.events` | `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow` |

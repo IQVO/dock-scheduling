@@ -7,6 +7,7 @@ import (
 	"github.com/claudioed/dock-scheduling/internal/application/repository"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
 	"github.com/claudioed/dock-scheduling/internal/application/views"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 )
 
 // Service is the slice of the application's use cases the tools drive:
@@ -23,6 +24,13 @@ type Service interface {
 	RescheduleAppointment(ctx context.Context, cmd usecases.RescheduleCommand) (views.AppointmentView, error)
 	CancelAppointment(ctx context.Context, cmd usecases.CancelCommand) (views.AppointmentView, error)
 	ReportEta(ctx context.Context, cmd usecases.EtaCommand) (views.EtaResult, error)
+
+	// The carrier registry (ADR 0012).
+	GetCarrier(ctx context.Context, scac string) (views.CarrierView, error)
+	ListCarriers(ctx context.Context, status carrier.Status, limit int, cursor string) (views.CarrierPage, error)
+	RegisterCarrier(ctx context.Context, cmd usecases.RegisterCarrierCommand) (views.CarrierResult, error)
+	SuspendCarrier(ctx context.Context, cmd usecases.SuspendCarrierCommand) (views.CarrierView, error)
+	ReinstateCarrier(ctx context.Context, cmd usecases.ReinstateCarrierCommand) (views.CarrierView, error)
 }
 
 // Idempotent runs a write at most once per idempotency key: *usecases.Idempotency

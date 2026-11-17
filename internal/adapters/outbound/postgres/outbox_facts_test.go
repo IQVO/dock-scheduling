@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/claudioed/dock-scheduling/internal/application/outbox"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -24,6 +25,18 @@ const (
 	door1  = "WH1-DOCK-IN-01"
 	door2  = "WH1-DOCK-IN-02"
 )
+
+// gln2 is the GS1 GLN of door2 in the goldens' world: door1 has none. So the
+// goldens of facts on door1 are what they were before the standard fields
+// existed (byte for byte), and the facts at door2 show a read point.
+const gln2 = "4012345000009"
+
+func glnOfGoldenWorld(code string) (string, error) {
+	if code == door2 {
+		return gln2, nil
+	}
+	return "", nil
+}
 
 func ts(day, h, m, s int) time.Time { return time.Date(2026, 11, day, h, m, s, 0, time.UTC) }
 
@@ -56,7 +69,7 @@ func asJSONValue(t *testing.T, v any) any {
 }
 
 func apptHeader(version int64, at time.Time) dockappointment.Header {
-	return dockappointment.Header{Appointment: apptID, Site: "WH1", Version: version, At: at}
+	return dockappointment.Header{Appointment: apptID, Site: "WH1", Version: version, At: at, Flow: shared.Inbound}
 }
 
 func TestAppointmentFactsRenderTheGoldenWireData(t *testing.T) {
@@ -90,7 +103,7 @@ func TestAppointmentFactsRenderTheGoldenWireData(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.golden, func(t *testing.T) {
-			got, err := appointmentFactData(c.event)
+			got, err := outbox.AppointmentFactData(c.event, glnOfGoldenWorld)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -124,7 +137,7 @@ func TestCalendarFactsRenderTheGoldenWireData(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.golden, func(t *testing.T) {
-			got, err := calendarFactData(c.event)
+			got, err := outbox.CalendarFactData(c.event, glnOfGoldenWorld)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -137,10 +150,10 @@ func TestCalendarFactsRenderTheGoldenWireData(t *testing.T) {
 
 // Optional fields are present-and-null, lists are present-and-empty, never omitted.
 func TestUnsetOptionalFieldsAreNullAndEmptyListsAreArrays(t *testing.T) {
-	got, err := appointmentFactData(dockappointment.BookedEvent{
+	got, err := outbox.AppointmentFactData(dockappointment.BookedEvent{
 		Header: apptHeader(1, ts(5, 12, 0, 0)), Direction: shared.Outbound, DoorCode: door1, Carrier: "ACME", WindowStart: ts(6, 8, 0, 0), WindowEnd: ts(6, 9, 0, 0),
 		ShipmentRefs: []string{"SHP-1"}, Provenance: dockappointment.Native,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +163,7 @@ func TestUnsetOptionalFieldsAreNullAndEmptyListsAreArrays(t *testing.T) {
 			t.Errorf("%s misses %s", raw, want)
 		}
 	}
-	risk, err := appointmentFactData(dockappointment.AtRisk{Header: apptHeader(2, ts(6, 7, 30, 0)), DoorCode: door1, Cause: dockappointment.DoorReassignedOverlap})
+	risk, err := outbox.AppointmentFactData(dockappointment.AtRisk{Header: apptHeader(2, ts(6, 7, 30, 0)), DoorCode: door1, Cause: dockappointment.DoorReassignedOverlap}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,10 +182,10 @@ type unknownCalendarEvent struct{ dockcalendar.Header }
 func (unknownCalendarEvent) EventName() string { return "DoorTeleported" }
 
 func TestAnUnknownFactHasNoWireShape(t *testing.T) {
-	if _, err := appointmentFactData(unknownAppointmentEvent{}); err == nil {
+	if _, err := outbox.AppointmentFactData(unknownAppointmentEvent{}, nil); err == nil {
 		t.Error("an unknown appointment fact must be refused")
 	}
-	if _, err := calendarFactData(unknownCalendarEvent{}); err == nil {
+	if _, err := outbox.CalendarFactData(unknownCalendarEvent{}, nil); err == nil {
 		t.Error("an unknown calendar fact must be refused")
 	}
 }

@@ -110,6 +110,52 @@ const sidebar: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Carriers",
+      link: {
+        type: "doc",
+        id: "api-reference/rest/carriers",
+      },
+      items: [
+        {
+          type: "doc",
+          id: "api-reference/rest/list-carriers",
+          label: "List the registered carriers",
+          className: "api-method get",
+        },
+        {
+          type: "doc",
+          id: "api-reference/rest/register-carrier",
+          label: "Register a carrier",
+          className: "api-method put",
+        },
+        {
+          type: "doc",
+          id: "api-reference/rest/get-carrier",
+          label: "Get a carrier",
+          className: "api-method get",
+        },
+        {
+          type: "doc",
+          id: "api-reference/rest/update-carrier",
+          label: "Update a registered carrier",
+          className: "api-method patch",
+        },
+        {
+          type: "doc",
+          id: "api-reference/rest/suspend-carrier",
+          label: "Suspend a carrier",
+          className: "api-method post",
+        },
+        {
+          type: "doc",
+          id: "api-reference/rest/reinstate-carrier",
+          label: "Reinstate a suspended carrier",
+          className: "api-method post",
+        },
+      ],
+    },
+    {
+      type: "category",
       label: "Sweeps",
       link: {
         type: "doc",

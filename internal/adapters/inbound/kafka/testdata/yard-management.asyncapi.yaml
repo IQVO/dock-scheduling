@@ -1,0 +1,3670 @@
+asyncapi: 3.0.0
+info:
+  title: yard-management Domain Events
+  version: 1.0.0
+  contact:
+    name: yard-management maintainers
+    url: https://github.com/IQVO/yard-management
+    email: yard-management@iqvo.example.com
+  license:
+    name: UNLICENSED
+  tags:
+  - name: yard-management
+    description: The yard-management bounded context (WMS subdomain).
+  description: 'Event catalogue of the **yard-management** bounded context (WMS subdomain): everything physically on site
+    outside the four walls - visits through the gate, which trailer is where, hostler and visiting-driver moves, door work
+    and yard checks (ADR 0001, 0002).
+
+
+    **Published.** Five aggregates (YardVisit, Trailer, YardMove, YardCheck, Inspection) raise 23 event types through a transactional
+    outbox: the aggregate row and its events are written in ONE database transaction and a relay drains them to Kafka (at-least-once;
+    the CloudEvents `id` is stored with the outbox row). Thirteen types are integration events on `warehouse.yard-management.events`
+    (VisitCheckedIn, VisitRejected, TrailerDocked, TrailerUndocked, SealExceptionRaised, TrailerDwellExceeded, YardCheckClosed, DoorWorkCompleted, TrailerDeparted,
+    TrailerSecured, TrailerSecuringReleased, InspectionCompleted, InspectionFailed)
+    and are mirrored on `warehouse.yard-management.analytics` under the same id; the other ten are analytics-only and go
+    ONLY to the analytics topic. The key of every message is its aggregate root id (`visit_id`, `trailer_id`, `move_id`, `yard_check_id`, `inspection_id`).
+
+
+    **Consumed (ADR 0003).** dock-scheduling (appointments, door closures and the carrier registry), facility-layout (locations and zones) and inbound-receiving
+    (ASNs and receipts) feed event-fed local copies; no sibling is ever called live. A message that is not a valid CloudEvents
+    1.0 event is skipped; a valid event of an unlisted `type` is ignored; a payload that can never be applied is dead-lettered
+    to `<topic>.dlq`; any other handler error is retried and dead-lettered after 5 attempts. Consumer groups come from `DOCK_SCHEDULING_CONSUMER_GROUP`,
+    `FACILITY_CONSUMER_GROUP`, `INBOUND_RECEIVING_CONSUMER_GROUP` and `ANALYTICS_CONSUMER_GROUP`.
+
+
+    **Envelope (mandatory).** CloudEvents 1.0, structured content mode, Kafka header `content-type: application/cloudevents+json;
+    charset=UTF-8`. `specversion`, `id`, `source` (`/warehouse/yard-management`), `type`, `subject`, `time`, `datacontenttype`
+    (`application/json`) and `dataschema` (`urn:warehouse:yard-management:<events|analytics>:<EventName>:v1`) are all required.
+    Type = `com.warehouse.wms.yard-management.<entity>.<EventName>`. `data` is snake_case, times are RFC 3339 UTC, `version`
+    is the aggregate version. A breaking payload change is a new `.v2` type, never a mutation.'
+servers:
+  production:
+    host: kafka.warehouse-systems.internal:9092
+    protocol: kafka
+    description: Fleet-shared Kafka broker (host supplied by the deployment environment).
+defaultContentType: application/cloudevents+json
+channels:
+  yardManagementEvents:
+    address: warehouse.yard-management.events
+    description: This service's integration topic. Written by the outbox relay; key = the aggregate root id. A row that can
+      never be encoded goes verbatim to `warehouse.yard-management.events.dlq`.
+    messages:
+      VisitCheckedIn:
+        $ref: '#/components/messages/VisitCheckedIn'
+      VisitRejected:
+        $ref: '#/components/messages/VisitRejected'
+      TrailerDocked:
+        $ref: '#/components/messages/TrailerDocked'
+      TrailerUndocked:
+        $ref: '#/components/messages/TrailerUndocked'
+      SealExceptionRaised:
+        $ref: '#/components/messages/SealExceptionRaised'
+      TrailerDwellExceeded:
+        $ref: '#/components/messages/TrailerDwellExceeded'
+      YardCheckClosed:
+        $ref: '#/components/messages/YardCheckClosed'
+      InspectionCompleted:
+        $ref: '#/components/messages/InspectionCompleted'
+      InspectionFailed:
+        $ref: '#/components/messages/InspectionFailed'
+      DoorWorkCompleted:
+        $ref: '#/components/messages/DoorWorkCompleted'
+      TrailerDeparted:
+        $ref: '#/components/messages/TrailerDeparted'
+      TrailerSecured:
+        $ref: '#/components/messages/TrailerSecured'
+      TrailerSecuringReleased:
+        $ref: '#/components/messages/TrailerSecuringReleased'
+  yardManagementAnalytics:
+    address: warehouse.yard-management.analytics
+    description: 'This service''s analytics stream, written by the SAME outbox pass: the thirteen integration types again (same
+      id, byte-identical payload, analytics dataschema) plus the ten analytics-only types. Consumed ONLY by this service''s
+      own projector. A consumed message whose payload can never be applied, or that the analytics store deterministically
+      rejects, is dead-lettered at once to `warehouse.yard-management.analytics.dlq` (the fleet `<topic>.dlq` convention)
+      and the offset committed past it; the dead letter is the untouched message (same key and value) with the headers
+      `x-dlq-source-topic` (`warehouse.yard-management.analytics`) and `x-dlq-cause` (the refusal reason) added. A transient
+      handler error is never dead-lettered: the same message is retried with capped backoff.'
+    messages:
+      VisitCheckedInAnalytics:
+        $ref: '#/components/messages/VisitCheckedInAnalytics'
+      VisitRejectedAnalytics:
+        $ref: '#/components/messages/VisitRejectedAnalytics'
+      VisitCheckedOutAnalytics:
+        $ref: '#/components/messages/VisitCheckedOutAnalytics'
+      TrailerDockedAnalytics:
+        $ref: '#/components/messages/TrailerDockedAnalytics'
+      TrailerUndockedAnalytics:
+        $ref: '#/components/messages/TrailerUndockedAnalytics'
+      TrailerParkedAnalytics:
+        $ref: '#/components/messages/TrailerParkedAnalytics'
+      DoorWorkStartedAnalytics:
+        $ref: '#/components/messages/DoorWorkStartedAnalytics'
+      DoorWorkCompletedAnalytics:
+        $ref: '#/components/messages/DoorWorkCompletedAnalytics'
+      TrailerDepartedAnalytics:
+        $ref: '#/components/messages/TrailerDepartedAnalytics'
+      SealExceptionRaisedAnalytics:
+        $ref: '#/components/messages/SealExceptionRaisedAnalytics'
+      TrailerDwellExceededAnalytics:
+        $ref: '#/components/messages/TrailerDwellExceededAnalytics'
+      TrailerHeldAnalytics:
+        $ref: '#/components/messages/TrailerHeldAnalytics'
+      TrailerHoldReleasedAnalytics:
+        $ref: '#/components/messages/TrailerHoldReleasedAnalytics'
+      TrailerSecuredAnalytics:
+        $ref: '#/components/messages/TrailerSecuredAnalytics'
+      TrailerSecuringReleasedAnalytics:
+        $ref: '#/components/messages/TrailerSecuringReleasedAnalytics'
+      YardMoveRequestedAnalytics:
+        $ref: '#/components/messages/YardMoveRequestedAnalytics'
+      YardMoveClaimedAnalytics:
+        $ref: '#/components/messages/YardMoveClaimedAnalytics'
+      YardMoveLeaseExpiredAnalytics:
+        $ref: '#/components/messages/YardMoveLeaseExpiredAnalytics'
+      YardMoveCompletedAnalytics:
+        $ref: '#/components/messages/YardMoveCompletedAnalytics'
+      YardMoveCancelledAnalytics:
+        $ref: '#/components/messages/YardMoveCancelledAnalytics'
+      YardCheckClosedAnalytics:
+        $ref: '#/components/messages/YardCheckClosedAnalytics'
+      InspectionCompletedAnalytics:
+        $ref: '#/components/messages/InspectionCompletedAnalytics'
+      InspectionFailedAnalytics:
+        $ref: '#/components/messages/InspectionFailedAnalytics'
+  dockSchedulingEvents:
+    address: warehouse.dock-scheduling.events
+    description: dock-scheduling's integration topic (key = appointment_id; closures key = site_id; carrier registry events
+      key = scac).
+    messages:
+      ConsumedDockAppointmentBooked:
+        $ref: '#/components/messages/ConsumedDockAppointmentBooked'
+      ConsumedDockAppointmentRescheduled:
+        $ref: '#/components/messages/ConsumedDockAppointmentRescheduled'
+      ConsumedDockAppointmentCancelled:
+        $ref: '#/components/messages/ConsumedDockAppointmentCancelled'
+      ConsumedDockAppointmentNoShow:
+        $ref: '#/components/messages/ConsumedDockAppointmentNoShow'
+      ConsumedDoorClosureScheduled:
+        $ref: '#/components/messages/ConsumedDoorClosureScheduled'
+      ConsumedDoorClosureLifted:
+        $ref: '#/components/messages/ConsumedDoorClosureLifted'
+      ConsumedCarrierRegistered:
+        $ref: '#/components/messages/ConsumedCarrierRegistered'
+      ConsumedCarrierSuspended:
+        $ref: '#/components/messages/ConsumedCarrierSuspended'
+      ConsumedCarrierReinstated:
+        $ref: '#/components/messages/ConsumedCarrierReinstated'
+  facilityEvents:
+    address: warehouse.facility.events
+    description: facility-layout's Published Language (camelCase payloads; key = locationCode or zoneId).
+    messages:
+      ConsumedZoneRegistered:
+        $ref: '#/components/messages/ConsumedZoneRegistered'
+      ConsumedLocationSlotRegistered:
+        $ref: '#/components/messages/ConsumedLocationSlotRegistered'
+      ConsumedLocationSlotDecommissioned:
+        $ref: '#/components/messages/ConsumedLocationSlotDecommissioned'
+  inboundReceivingEvents:
+    address: warehouse.inbound-receiving.events
+    description: inbound-receiving's integration topic (key = asn_number).
+    messages:
+      ConsumedASNRegistered:
+        $ref: '#/components/messages/ConsumedASNRegistered'
+      ConsumedASNCancelled:
+        $ref: '#/components/messages/ConsumedASNCancelled'
+      ConsumedReceiptOpened:
+        $ref: '#/components/messages/ConsumedReceiptOpened'
+      ConsumedReceiptClosed:
+        $ref: '#/components/messages/ConsumedReceiptClosed'
+operations:
+  publishYardManagementEvents:
+    action: send
+    channel:
+      $ref: '#/channels/yardManagementEvents'
+    summary: Publish the integration events of the yard.
+    description: 'Publishes the thirteen integration event types. TrailerSecured and TrailerSecuringReleased (ADR 0013) and InspectionCompleted (ADR 0015) have no consumer yet: they are the safety interlock facts and the inspection audit record of the yard. Consumers: outbound-shipping (TrailerDocked, DoorWorkCompleted, TrailerDeparted), dock-scheduling (VisitCheckedIn, TrailerDocked,
+      TrailerUndocked), inbound-receiving (VisitCheckedIn), dock-scheduling (VisitRejected), exception-management (VisitRejected,
+      SealExceptionRaised, TrailerDwellExceeded, YardCheckClosed). InspectionFailed has no consumer yet: exception-management is its planned consumer (ADR 0015).'
+    messages:
+    - $ref: '#/channels/yardManagementEvents/messages/VisitCheckedIn'
+    - $ref: '#/channels/yardManagementEvents/messages/VisitRejected'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerDocked'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerUndocked'
+    - $ref: '#/channels/yardManagementEvents/messages/SealExceptionRaised'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerDwellExceeded'
+    - $ref: '#/channels/yardManagementEvents/messages/YardCheckClosed'
+    - $ref: '#/channels/yardManagementEvents/messages/DoorWorkCompleted'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerDeparted'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerSecured'
+    - $ref: '#/channels/yardManagementEvents/messages/TrailerSecuringReleased'
+    - $ref: '#/channels/yardManagementEvents/messages/InspectionCompleted'
+    - $ref: '#/channels/yardManagementEvents/messages/InspectionFailed'
+  publishYardManagementAnalytics:
+    action: send
+    channel:
+      $ref: '#/channels/yardManagementAnalytics'
+    summary: Publish the analytics stream.
+    description: Publishes every event type to the analytics topic; consumed only by this service's projector.
+    messages:
+    - $ref: '#/channels/yardManagementAnalytics/messages/VisitCheckedInAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/VisitRejectedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/VisitCheckedOutAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerDockedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerUndockedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerParkedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/DoorWorkStartedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/DoorWorkCompletedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerDepartedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/SealExceptionRaisedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerDwellExceededAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerHeldAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerHoldReleasedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerSecuredAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/TrailerSecuringReleasedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardMoveRequestedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardMoveClaimedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardMoveLeaseExpiredAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardMoveCompletedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardMoveCancelledAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/YardCheckClosedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/InspectionCompletedAnalytics'
+    - $ref: '#/channels/yardManagementAnalytics/messages/InspectionFailedAnalytics'
+    x-no-consumer-reason: Consumed only by this service's own projector (cmd/yard-projector).
+  receiveDockSchedulingEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/dockSchedulingEvents'
+    summary: Receive appointments, door closures and carrier registry facts.
+    description: Feeds the AppointmentView and DoorClosureView (NoShowFreesHolding reacts to DockAppointmentNoShow and
+      DockAppointmentCancelled) and the CarrierView, the local copy of the carrier registry keyed by SCAC (ADR 0016).
+    messages:
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDockAppointmentBooked'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDockAppointmentRescheduled'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDockAppointmentCancelled'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDockAppointmentNoShow'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDoorClosureScheduled'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedDoorClosureLifted'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedCarrierRegistered'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedCarrierSuspended'
+    - $ref: '#/channels/dockSchedulingEvents/messages/ConsumedCarrierReinstated'
+  receiveFacilityEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/facilityEvents'
+    summary: Receive zones and location slots.
+    description: 'Feeds the LocationView: role Yard slots are spots, role Dock slots are doors with a dockFlow.'
+    messages:
+    - $ref: '#/channels/facilityEvents/messages/ConsumedZoneRegistered'
+    - $ref: '#/channels/facilityEvents/messages/ConsumedLocationSlotRegistered'
+    - $ref: '#/channels/facilityEvents/messages/ConsumedLocationSlotDecommissioned'
+  receiveInboundReceivingEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/inboundReceivingEvents'
+    summary: Receive ASNs and receipts.
+    description: Feeds the AsnContentView and ReceiptAtDoorView; AutoCompleteUnload reacts to ReceiptClosed.
+    messages:
+    - $ref: '#/channels/inboundReceivingEvents/messages/ConsumedASNRegistered'
+    - $ref: '#/channels/inboundReceivingEvents/messages/ConsumedASNCancelled'
+    - $ref: '#/channels/inboundReceivingEvents/messages/ConsumedReceiptOpened'
+    - $ref: '#/channels/inboundReceivingEvents/messages/ConsumedReceiptClosed'
+components:
+  messages:
+    VisitCheckedIn:
+      name: VisitCheckedIn
+      title: VisitCheckedIn
+      summary: A tractor and driver passed the gate. Consumed by dock-scheduling (ArrivalFromGate) and inbound-receiving.
+      description: '`type` = `com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn`; subject and key = `visit_id`; dataschema
+        `urn:warehouse:yard-management:events:VisitCheckedIn:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn
+            dataschema:
+              const: urn:warehouse:yard-management:events:VisitCheckedIn:v1
+            data:
+              $ref: '#/components/schemas/VisitCheckedInData'
+      examples:
+      - name: VisitCheckedIn
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000001
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn
+          subject: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+          time: '2026-11-05T14:02:11Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:VisitCheckedIn:v1
+          data:
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            site_id: WH1
+            carrier: Acme Freight
+            carrier_scac: ACME
+            purpose: LIVE_UNLOAD
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            trailers:
+            - trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+              unit_number: TR-1042
+              carrier_scac: ACME
+              kind: DRY_VAN
+              load_state: LOADED
+              unit_number_scheme: null
+              seal_class: S
+              hazmat_class: null
+              un_number: null
+              requires_temperature_control: false
+            arrived_at: '2026-11-05T14:02:11Z'
+            version: 1
+      tags:
+      - name: yardvisit
+    VisitCheckedInAnalytics:
+      name: VisitCheckedIn
+      title: VisitCheckedIn
+      summary: A tractor and driver passed the gate. Consumed by dock-scheduling (ArrivalFromGate) and inbound-receiving.
+      description: '`type` = `com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn`; subject and key = `visit_id`; dataschema
+        `urn:warehouse:yard-management:analytics:VisitCheckedIn:v1`. Byte-identical payload to the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:VisitCheckedIn:v1
+            data:
+              $ref: '#/components/schemas/VisitCheckedInData'
+      examples:
+      - name: VisitCheckedIn
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000001
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardvisit.VisitCheckedIn
+          subject: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+          time: '2026-11-05T14:02:11Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:VisitCheckedIn:v1
+          data:
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            site_id: WH1
+            carrier: Acme Freight
+            carrier_scac: ACME
+            purpose: LIVE_UNLOAD
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            trailers:
+            - trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+              unit_number: TR-1042
+              carrier_scac: ACME
+              kind: DRY_VAN
+              load_state: LOADED
+              unit_number_scheme: null
+              seal_class: S
+              hazmat_class: null
+              un_number: null
+              requires_temperature_control: false
+            arrived_at: '2026-11-05T14:02:11Z'
+            version: 1
+      tags:
+      - name: yardvisit
+    VisitRejected:
+      name: VisitRejected
+      title: VisitRejected
+      summary: A visit was turned away at the gate. Consumed by dock-scheduling (CancelOnVisitRejected) and exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.yardvisit.VisitRejected`; subject and key = `visit_id`; dataschema
+        `urn:warehouse:yard-management:events:VisitRejected:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardvisit.VisitRejected
+            dataschema:
+              const: urn:warehouse:yard-management:events:VisitRejected:v1
+            data:
+              $ref: '#/components/schemas/VisitRejectedData'
+      examples:
+      - name: VisitRejected
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000002
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardvisit.VisitRejected
+          subject: visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c
+          time: '2026-11-05T14:05:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:VisitRejected:v1
+          data:
+            visit_id: visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c
+            site_id: WH1
+            carrier_scac: ACME
+            appointment_id: null
+            reason: APPOINTMENT_REQUIRED
+            rejected_at: '2026-11-05T14:05:00Z'
+      tags:
+      - name: yardvisit
+    VisitRejectedAnalytics:
+      name: VisitRejected
+      title: VisitRejected
+      summary: A visit was turned away at the gate. Consumed by dock-scheduling (CancelOnVisitRejected) and exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.yardvisit.VisitRejected`; subject and key = `visit_id`; dataschema
+        `urn:warehouse:yard-management:analytics:VisitRejected:v1`. Byte-identical payload to the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardvisit.VisitRejected
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:VisitRejected:v1
+            data:
+              $ref: '#/components/schemas/VisitRejectedData'
+      examples:
+      - name: VisitRejected
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000002
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardvisit.VisitRejected
+          subject: visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c
+          time: '2026-11-05T14:05:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:VisitRejected:v1
+          data:
+            visit_id: visit-9c8b7a6d-5e4f-4321-8abc-0d1e2f3a4b5c
+            site_id: WH1
+            carrier_scac: ACME
+            appointment_id: null
+            reason: APPOINTMENT_REQUIRED
+            rejected_at: '2026-11-05T14:05:00Z'
+      tags:
+      - name: yardvisit
+    VisitCheckedOutAnalytics:
+      name: VisitCheckedOut
+      title: VisitCheckedOut
+      summary: The visit left the site. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardvisit.VisitCheckedOut`; subject and key = `visit_id`;
+        dataschema `urn:warehouse:yard-management:analytics:VisitCheckedOut:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardvisit.VisitCheckedOut
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:VisitCheckedOut:v1
+            data:
+              $ref: '#/components/schemas/VisitCheckedOutData'
+      examples:
+      - name: VisitCheckedOut
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000003
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardvisit.VisitCheckedOut
+          subject: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+          time: '2026-11-05T15:40:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:VisitCheckedOut:v1
+          data:
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            site_id: WH1
+            trailers_out:
+            - trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            departed_at: '2026-11-05T15:40:00Z'
+            on_site_minutes: 98
+            version: 2
+      tags:
+      - name: yardvisit
+    TrailerDocked:
+      name: TrailerDocked
+      title: TrailerDocked
+      summary: A trailer is at a door. Consumed by dock-scheduling (ActualDoorWins) and outbound-shipping.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDocked`; subject and key = `trailer_id`; dataschema
+        `urn:warehouse:yard-management:events:TrailerDocked:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDocked
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerDocked:v1
+            data:
+              $ref: '#/components/schemas/TrailerDockedData'
+      examples:
+      - name: TrailerDocked
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000004
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDocked
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:10:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerDocked:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            asn_numbers:
+            - ASN-1001
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            docked_at: '2026-11-05T14:10:00Z'
+            version: 3
+            seal_state: VERIFIED
+            seal_class: S
+            hazmat_class: null
+            un_number: null
+            requires_temperature_control: false
+      tags:
+      - name: trailer
+    TrailerDockedAnalytics:
+      name: TrailerDocked
+      title: TrailerDocked
+      summary: A trailer is at a door. Consumed by dock-scheduling (ActualDoorWins) and outbound-shipping.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDocked`; subject and key = `trailer_id`; dataschema
+        `urn:warehouse:yard-management:analytics:TrailerDocked:v1`. Byte-identical payload to the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDocked
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerDocked:v1
+            data:
+              $ref: '#/components/schemas/TrailerDockedData'
+      examples:
+      - name: TrailerDocked
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000004
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDocked
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:10:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerDocked:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            asn_numbers:
+            - ASN-1001
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            docked_at: '2026-11-05T14:10:00Z'
+            version: 3
+            seal_state: VERIFIED
+            seal_class: S
+            hazmat_class: null
+            un_number: null
+            requires_temperature_control: false
+      tags:
+      - name: trailer
+    TrailerUndocked:
+      name: TrailerUndocked
+      title: TrailerUndocked
+      summary: A trailer left a door (to a spot, or out of the gate). Consumed by dock-scheduling (CompleteOnDoorRelease).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerUndocked`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:TrailerUndocked:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerUndocked
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerUndocked:v1
+            data:
+              $ref: '#/components/schemas/TrailerUndockedData'
+      examples:
+      - name: TrailerUndocked
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000005
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerUndocked
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerUndocked:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            undocked_at: '2026-11-05T15:30:00Z'
+            version: 7
+      tags:
+      - name: trailer
+    TrailerUndockedAnalytics:
+      name: TrailerUndocked
+      title: TrailerUndocked
+      summary: A trailer left a door (to a spot, or out of the gate). Consumed by dock-scheduling (CompleteOnDoorRelease).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerUndocked`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerUndocked:v1`. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerUndocked
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerUndocked:v1
+            data:
+              $ref: '#/components/schemas/TrailerUndockedData'
+      examples:
+      - name: TrailerUndocked
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000005
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerUndocked
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerUndocked:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            undocked_at: '2026-11-05T15:30:00Z'
+            version: 7
+      tags:
+      - name: trailer
+    TrailerParkedAnalytics:
+      name: TrailerParked
+      title: TrailerParked
+      summary: A trailer came to rest on a yard spot. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerParked`; subject and key = `trailer_id`; dataschema
+        `urn:warehouse:yard-management:analytics:TrailerParked:v1`. Analytics only: never on the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerParked
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerParked:v1
+            data:
+              $ref: '#/components/schemas/TrailerParkedData'
+      examples:
+      - name: TrailerParked
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000006
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerParked
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerParked:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            spot_code: WH1-YARD-P014
+            version: 2
+      tags:
+      - name: trailer
+    DoorWorkStartedAnalytics:
+      name: DoorWorkStarted
+      title: DoorWorkStarted
+      summary: Unloading or loading began at the door (the end of driver wait). Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.DoorWorkStarted`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:DoorWorkStarted:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.DoorWorkStarted
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:DoorWorkStarted:v1
+            data:
+              $ref: '#/components/schemas/DoorWorkStartedData'
+      examples:
+      - name: DoorWorkStarted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000007
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.DoorWorkStarted
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:12:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:DoorWorkStarted:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: null
+            started_at: '2026-11-05T14:12:00Z'
+            version: 4
+      tags:
+      - name: trailer
+    DoorWorkCompleted:
+      name: DoorWorkCompleted
+      title: DoorWorkCompleted
+      summary: Door work finished.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.DoorWorkCompleted`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:DoorWorkCompleted:v1`. Consumed by outbound-shipping (ship-confirm follows the physical departure).'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.DoorWorkCompleted
+            dataschema:
+              const: urn:warehouse:yard-management:events:DoorWorkCompleted:v1
+            data:
+              $ref: '#/components/schemas/DoorWorkCompletedData'
+      examples:
+      - name: DoorWorkCompleted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000008
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.DoorWorkCompleted
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:25:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:DoorWorkCompleted:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: null
+            completed_at: '2026-11-05T15:25:00Z'
+            load_state: EMPTY
+            version: 5
+      tags:
+      - name: trailer
+    DoorWorkCompletedAnalytics:
+      name: DoorWorkCompleted
+      title: DoorWorkCompleted
+      summary: Door work finished.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.DoorWorkCompleted`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:DoorWorkCompleted:v1`. Byte-identical payload to the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.DoorWorkCompleted
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:DoorWorkCompleted:v1
+            data:
+              $ref: '#/components/schemas/DoorWorkCompletedData'
+      examples:
+      - name: DoorWorkCompleted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000008
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.DoorWorkCompleted
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:25:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:DoorWorkCompleted:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            appointment_id: null
+            completed_at: '2026-11-05T15:25:00Z'
+            load_state: EMPTY
+            version: 5
+      tags:
+      - name: trailer
+    TrailerDeparted:
+      name: TrailerDeparted
+      title: TrailerDeparted
+      summary: A trailer left the site (the end of its dwell).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDeparted`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:TrailerDeparted:v1`. Consumed by outbound-shipping (ship-confirm follows the physical departure).'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDeparted
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerDeparted:v1
+            data:
+              $ref: '#/components/schemas/TrailerDepartedData'
+      examples:
+      - name: TrailerDeparted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000009
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDeparted
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:40:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerDeparted:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            departed_at: '2026-11-05T15:40:00Z'
+            dwell_minutes: 98
+            load_state: EMPTY
+            seal_number: null
+            version: 8
+            seal_state: null
+            seal_class: null
+      tags:
+      - name: trailer
+    TrailerDepartedAnalytics:
+      name: TrailerDeparted
+      title: TrailerDeparted
+      summary: A trailer left the site (the end of its dwell).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDeparted`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerDeparted:v1`. Byte-identical payload to the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDeparted
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerDeparted:v1
+            data:
+              $ref: '#/components/schemas/TrailerDepartedData'
+      examples:
+      - name: TrailerDeparted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000009
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDeparted
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:40:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerDeparted:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            visit_id: visit-5b1f0c3e-7a24-4d1e-9c55-0e7d3f2a9b10
+            departed_at: '2026-11-05T15:40:00Z'
+            dwell_minutes: 98
+            load_state: EMPTY
+            seal_number: null
+            version: 8
+            seal_state: null
+            seal_class: null
+      tags:
+      - name: trailer
+    TrailerSecured:
+      name: TrailerSecured
+      title: TrailerSecured
+      summary: A docked trailer was secured by a vehicle restraint or wheel chocks (the dock safety interlock, ADR 0013).
+      x-no-consumer-reason: 'No consumer yet, by design: the dock safety interlock fact of this yard; the actionable outcome is the door work that follows it.'
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerSecured`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:TrailerSecured:v1`. Raised by SecureTrailer (ADR 0013); idempotent for the same method, so a repeat raises nothing.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerSecured
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerSecured:v1
+            data:
+              $ref: '#/components/schemas/TrailerSecuredData'
+      examples:
+      - name: TrailerSecured
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000020
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerSecured
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:21:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerSecured:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            method: WHEEL_CHOCKS
+            secured_at: '2026-11-05T14:21:00Z'
+            version: 4
+      tags:
+      - name: trailer
+    TrailerSecuredAnalytics:
+      name: TrailerSecured
+      title: TrailerSecured
+      summary: A docked trailer was secured by a vehicle restraint or wheel chocks (the dock safety interlock, ADR 0013).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerSecured`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerSecured:v1`. Raised by SecureTrailer (ADR 0013); idempotent for the same method, so a repeat raises nothing. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerSecured
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerSecured:v1
+            data:
+              $ref: '#/components/schemas/TrailerSecuredData'
+      examples:
+      - name: TrailerSecured
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000020
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerSecured
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:21:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerSecured:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            method: WHEEL_CHOCKS
+            secured_at: '2026-11-05T14:21:00Z'
+            version: 4
+      tags:
+      - name: trailer
+    TrailerSecuringReleased:
+      name: TrailerSecuringReleased
+      title: TrailerSecuringReleased
+      summary: The securing of a docked trailer was released (restraint off or chocks removed, ADR 0013).
+      x-no-consumer-reason: 'No consumer yet, by design: the dock safety interlock fact of this yard; the actionable outcome is the door work that follows it.'
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:TrailerSecuringReleased:v1`. Raised by ReleaseTrailerSecuring (ADR 0013); required before a trailer leaves its door.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerSecuringReleased:v1
+            data:
+              $ref: '#/components/schemas/TrailerSecuringReleasedData'
+      examples:
+      - name: TrailerSecuringReleased
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000021
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:25:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerSecuringReleased:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            released_at: '2026-11-05T15:25:00Z'
+            version: 7
+      tags:
+      - name: trailer
+    TrailerSecuringReleasedAnalytics:
+      name: TrailerSecuringReleased
+      title: TrailerSecuringReleased
+      summary: The securing of a docked trailer was released (restraint off or chocks removed, ADR 0013).
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerSecuringReleased:v1`. Raised by ReleaseTrailerSecuring (ADR 0013); required before a trailer leaves its door. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerSecuringReleased:v1
+            data:
+              $ref: '#/components/schemas/TrailerSecuringReleasedData'
+      examples:
+      - name: TrailerSecuringReleased
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000021
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerSecuringReleased
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T15:25:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerSecuringReleased:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            released_at: '2026-11-05T15:25:00Z'
+            version: 7
+      tags:
+      - name: trailer
+    SealExceptionRaised:
+      name: SealExceptionRaised
+      title: SealExceptionRaised
+      summary: The seal recorded at the gate differs from the appointment's expected seal. Consumed by exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.SealExceptionRaised`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:SealExceptionRaised:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.SealExceptionRaised
+            dataschema:
+              const: urn:warehouse:yard-management:events:SealExceptionRaised:v1
+            data:
+              $ref: '#/components/schemas/SealExceptionRaisedData'
+      examples:
+      - name: SealExceptionRaised
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000010
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.SealExceptionRaised
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:03:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:SealExceptionRaised:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            expected_seal_number: SL-778
+            found_seal_number: SL-779
+            raised_at: '2026-11-05T14:03:00Z'
+      tags:
+      - name: trailer
+    SealExceptionRaisedAnalytics:
+      name: SealExceptionRaised
+      title: SealExceptionRaised
+      summary: The seal recorded at the gate differs from the appointment's expected seal. Consumed by exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.SealExceptionRaised`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:SealExceptionRaised:v1`. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.SealExceptionRaised
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:SealExceptionRaised:v1
+            data:
+              $ref: '#/components/schemas/SealExceptionRaisedData'
+      examples:
+      - name: SealExceptionRaised
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000010
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.SealExceptionRaised
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:03:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:SealExceptionRaised:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            expected_seal_number: SL-778
+            found_seal_number: SL-779
+            raised_at: '2026-11-05T14:03:00Z'
+      tags:
+      - name: trailer
+    TrailerDwellExceeded:
+      name: TrailerDwellExceeded
+      title: TrailerDwellExceeded
+      summary: A trailer's dwell crossed its kind's threshold (once per trailer and threshold). Consumed by exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:events:TrailerDwellExceeded:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded
+            dataschema:
+              const: urn:warehouse:yard-management:events:TrailerDwellExceeded:v1
+            data:
+              $ref: '#/components/schemas/TrailerDwellExceededData'
+      examples:
+      - name: TrailerDwellExceeded
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000011
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:TrailerDwellExceeded:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            kind: DRY_VAN
+            dwell_minutes: 1500
+            threshold_minutes: 1440
+            location_code: WH1-YARD-P014
+      tags:
+      - name: trailer
+    TrailerDwellExceededAnalytics:
+      name: TrailerDwellExceeded
+      title: TrailerDwellExceeded
+      summary: A trailer's dwell crossed its kind's threshold (once per trailer and threshold). Consumed by exception-management.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerDwellExceeded:v1`. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerDwellExceeded:v1
+            data:
+              $ref: '#/components/schemas/TrailerDwellExceededData'
+      examples:
+      - name: TrailerDwellExceeded
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000011
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerDwellExceeded
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerDwellExceeded:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            kind: DRY_VAN
+            dwell_minutes: 1500
+            threshold_minutes: 1440
+            location_code: WH1-YARD-P014
+      tags:
+      - name: trailer
+    TrailerHeldAnalytics:
+      name: TrailerHeld
+      title: TrailerHeld
+      summary: A hold was placed on a trailer. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerHeld`; subject and key = `trailer_id`; dataschema
+        `urn:warehouse:yard-management:analytics:TrailerHeld:v1`. Analytics only: never on the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerHeld
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerHeld:v1
+            data:
+              $ref: '#/components/schemas/TrailerHeldData'
+      examples:
+      - name: TrailerHeld
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000012
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerHeld
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerHeld:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            reason: DAMAGED
+            version: 4
+      tags:
+      - name: trailer
+    TrailerHoldReleasedAnalytics:
+      name: TrailerHoldReleased
+      title: TrailerHoldReleased
+      summary: A trailer's hold was released. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.trailer.TrailerHoldReleased`; subject and key = `trailer_id`;
+        dataschema `urn:warehouse:yard-management:analytics:TrailerHoldReleased:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.trailer.TrailerHoldReleased
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:TrailerHoldReleased:v1
+            data:
+              $ref: '#/components/schemas/TrailerHoldReleasedData'
+      examples:
+      - name: TrailerHoldReleased
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000013
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.trailer.TrailerHoldReleased
+          subject: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:TrailerHoldReleased:v1
+          data:
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            site_id: WH1
+            version: 5
+      tags:
+      - name: trailer
+    YardMoveRequestedAnalytics:
+      name: YardMoveRequested
+      title: YardMoveRequested
+      summary: A move was requested (a visiting driver's first move is created already claimed). Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardmove.YardMoveRequested`; subject and key = `move_id`;
+        dataschema `urn:warehouse:yard-management:analytics:YardMoveRequested:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardmove.YardMoveRequested
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardMoveRequested:v1
+            data:
+              $ref: '#/components/schemas/YardMoveRequestedData'
+      examples:
+      - name: YardMoveRequested
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000014
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardmove.YardMoveRequested
+          subject: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardMoveRequested:v1
+          data:
+            move_id: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            performer: VISITING_DRIVER
+            from_location: null
+            to_location:
+              kind: DOOR
+              code: WH1-DOCK-D01
+            reason: TO_DOOR
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            due_by: '2026-11-05T14:30:00Z'
+            version: 1
+      tags:
+      - name: yardmove
+    YardMoveClaimedAnalytics:
+      name: YardMoveClaimed
+      title: YardMoveClaimed
+      summary: A hostler claimed a move with a lease. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardmove.YardMoveClaimed`; subject and key = `move_id`; dataschema
+        `urn:warehouse:yard-management:analytics:YardMoveClaimed:v1`. Analytics only: never on the integration topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardmove.YardMoveClaimed
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardMoveClaimed:v1
+            data:
+              $ref: '#/components/schemas/YardMoveClaimedData'
+      examples:
+      - name: YardMoveClaimed
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000015
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardmove.YardMoveClaimed
+          subject: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+          time: '2026-11-05T14:20:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardMoveClaimed:v1
+          data:
+            move_id: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+            site_id: WH1
+            hostler_ref: hostler-07
+            claimed_at: '2026-11-05T14:20:00Z'
+            version: 2
+      tags:
+      - name: yardmove
+    YardMoveLeaseExpiredAnalytics:
+      name: YardMoveLeaseExpired
+      title: YardMoveLeaseExpired
+      summary: A hostler's lease ran out and the move went back to REQUESTED (the trailer returned to its origin). Analytics
+        only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardmove.YardMoveLeaseExpired`; subject and key = `move_id`;
+        dataschema `urn:warehouse:yard-management:analytics:YardMoveLeaseExpired:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardmove.YardMoveLeaseExpired
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardMoveLeaseExpired:v1
+            data:
+              $ref: '#/components/schemas/YardMoveLeaseExpiredData'
+      examples:
+      - name: YardMoveLeaseExpired
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000016
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardmove.YardMoveLeaseExpired
+          subject: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardMoveLeaseExpired:v1
+          data:
+            move_id: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+            site_id: WH1
+            hostler_ref: hostler-07
+            version: 3
+      tags:
+      - name: yardmove
+    YardMoveCompletedAnalytics:
+      name: YardMoveCompleted
+      title: YardMoveCompleted
+      summary: A move was completed at its recorded actual location. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardmove.YardMoveCompleted`; subject and key = `move_id`;
+        dataschema `urn:warehouse:yard-management:analytics:YardMoveCompleted:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardmove.YardMoveCompleted
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardMoveCompleted:v1
+            data:
+              $ref: '#/components/schemas/YardMoveCompletedData'
+      examples:
+      - name: YardMoveCompleted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000017
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardmove.YardMoveCompleted
+          subject: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+          time: '2026-11-05T14:27:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardMoveCompleted:v1
+          data:
+            move_id: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            performer: HOSTLER
+            hostler_ref: hostler-07
+            from_location:
+              kind: SPOT
+              code: WH1-YARD-P014
+            to_location:
+              kind: DOOR
+              code: WH1-DOCK-D01
+            actual_location:
+              kind: DOOR
+              code: WH1-DOCK-D01
+            reason: TO_DOOR
+            completed_at: '2026-11-05T14:27:00Z'
+            duration_seconds: 420
+            version: 3
+      tags:
+      - name: yardmove
+    YardMoveCancelledAnalytics:
+      name: YardMoveCancelled
+      title: YardMoveCancelled
+      summary: An open move was cancelled. Analytics only.
+      description: '`type` = `com.warehouse.wms.yard-management.yardmove.YardMoveCancelled`; subject and key = `move_id`;
+        dataschema `urn:warehouse:yard-management:analytics:YardMoveCancelled:v1`. Analytics only: never on the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardmove.YardMoveCancelled
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardMoveCancelled:v1
+            data:
+              $ref: '#/components/schemas/YardMoveCancelledData'
+      examples:
+      - name: YardMoveCancelled
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000018
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardmove.YardMoveCancelled
+          subject: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+          time: '2026-11-05T14:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardMoveCancelled:v1
+          data:
+            move_id: mv-2d3e4f50-6172-4839-8a9b-0c1d2e3f4a5b
+            site_id: WH1
+            reason: appointment cancelled
+            version: 2
+      tags:
+      - name: yardmove
+    InspectionCompleted:
+      name: InspectionCompleted
+      title: InspectionCompleted
+      summary: An inspection of a trailer was completed, PASSED or FAILED (ADR 0015). The audit record of every inspection; no consumer yet.
+      description: '`type` = `com.warehouse.wms.yard-management.inspection.InspectionCompleted`; subject and key = `inspection_id`;
+        dataschema `urn:warehouse:yard-management:events:InspectionCompleted:v1`. Raised by CompleteInspection (ADR 0015); the inspection is final once completed, so the payload carries no version. A template is versioned and an inspection keeps the version it was opened from (template_version).'
+      contentType: application/cloudevents+json
+      x-no-consumer-reason: 'No consumer yet, by design: the audit record of every inspection; the actionable failure reaches exception-management as InspectionFailed.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.inspection.InspectionCompleted
+            dataschema:
+              const: urn:warehouse:yard-management:events:InspectionCompleted:v1
+            data:
+              $ref: '#/components/schemas/InspectionCompletedData'
+      examples:
+      - name: InspectionCompleted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000022
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.inspection.InspectionCompleted
+          subject: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+          time: '2026-11-05T14:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:InspectionCompleted:v1
+          data:
+            inspection_id: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            visit_id: visit-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            template_id: tractor-trailer-17-point
+            template_version: 1
+            gate: PRE_DOCK
+            outcome: FAILED
+            condition_grade: DAMAGED
+            completed_at: '2026-11-05T14:30:00Z'
+            failed_item_codes:
+            - fifth-wheel
+      tags:
+      - name: inspection
+    InspectionCompletedAnalytics:
+      name: InspectionCompleted
+      title: InspectionCompleted
+      summary: An inspection of a trailer was completed, PASSED or FAILED (ADR 0015). The audit record of every inspection; no consumer yet.
+      description: '`type` = `com.warehouse.wms.yard-management.inspection.InspectionCompleted`; subject and key = `inspection_id`;
+        dataschema `urn:warehouse:yard-management:analytics:InspectionCompleted:v1`. Raised by CompleteInspection (ADR 0015); the inspection is final once completed, so the payload carries no version. A template is versioned and an inspection keeps the version it was opened from (template_version). Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.inspection.InspectionCompleted
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:InspectionCompleted:v1
+            data:
+              $ref: '#/components/schemas/InspectionCompletedData'
+      examples:
+      - name: InspectionCompleted
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000022
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.inspection.InspectionCompleted
+          subject: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+          time: '2026-11-05T14:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:InspectionCompleted:v1
+          data:
+            inspection_id: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            visit_id: visit-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            template_id: tractor-trailer-17-point
+            template_version: 1
+            gate: PRE_DOCK
+            outcome: FAILED
+            condition_grade: DAMAGED
+            completed_at: '2026-11-05T14:30:00Z'
+            failed_item_codes:
+            - fifth-wheel
+      tags:
+      - name: inspection
+    InspectionFailed:
+      name: InspectionFailed
+      title: InspectionFailed
+      summary: A required item of an inspection failed (ADR 0015); the trailer is held in the same step unless it already was. The intended consumer, exception-management, is not built yet (ADR 0015).
+      x-no-consumer-reason: 'No consumer yet, by design: the failed check holds the trailer in the same instant (ADR 0015), so enforcement is local; this event is the audit fact of that failure.'
+      description: '`type` = `com.warehouse.wms.yard-management.inspection.InspectionFailed`; subject and key = `inspection_id`;
+        dataschema `urn:warehouse:yard-management:events:InspectionFailed:v1`. Raised by CompleteInspection (ADR 0015) only for a FAILED inspection, after InspectionCompleted; hold_placed is false when the trailer already carried a hold.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.inspection.InspectionFailed
+            dataschema:
+              const: urn:warehouse:yard-management:events:InspectionFailed:v1
+            data:
+              $ref: '#/components/schemas/InspectionFailedData'
+      examples:
+      - name: InspectionFailed
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000023
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.inspection.InspectionFailed
+          subject: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+          time: '2026-11-05T14:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:InspectionFailed:v1
+          data:
+            inspection_id: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            template_id: tractor-trailer-17-point
+            gate: PRE_DOCK
+            failed_items:
+            - item_code: fifth-wheel
+              note: cracked weld at the coupling plate
+              required: true
+            failed_at: '2026-11-05T14:30:00Z'
+            hold_placed: true
+      tags:
+      - name: inspection
+    InspectionFailedAnalytics:
+      name: InspectionFailed
+      title: InspectionFailed
+      summary: A required item of an inspection failed (ADR 0015); the trailer is held in the same step unless it already was. The intended consumer, exception-management, is not built yet (ADR 0015).
+      description: '`type` = `com.warehouse.wms.yard-management.inspection.InspectionFailed`; subject and key = `inspection_id`;
+        dataschema `urn:warehouse:yard-management:analytics:InspectionFailed:v1`. Raised by CompleteInspection (ADR 0015) only for a FAILED inspection, after InspectionCompleted; hold_placed is false when the trailer already carried a hold. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.inspection.InspectionFailed
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:InspectionFailed:v1
+            data:
+              $ref: '#/components/schemas/InspectionFailedData'
+      examples:
+      - name: InspectionFailed
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000023
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.inspection.InspectionFailed
+          subject: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+          time: '2026-11-05T14:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:InspectionFailed:v1
+          data:
+            inspection_id: insp-5b6c7d8e-9f01-4a2b-8c3d-4e5f60718293
+            site_id: WH1
+            trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+            template_id: tractor-trailer-17-point
+            gate: PRE_DOCK
+            failed_items:
+            - item_code: fifth-wheel
+              note: cracked weld at the coupling plate
+              required: true
+            failed_at: '2026-11-05T14:30:00Z'
+            hold_placed: true
+      tags:
+      - name: inspection
+    YardCheckClosed:
+      name: YardCheckClosed
+      title: YardCheckClosed
+      summary: A yard audit was closed with its discrepancies. Consumed by exception-management (one case per discrepancy).
+      description: '`type` = `com.warehouse.wms.yard-management.yardcheck.YardCheckClosed`; subject and key = `yard_check_id`;
+        dataschema `urn:warehouse:yard-management:events:YardCheckClosed:v1`.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardcheck.YardCheckClosed
+            dataschema:
+              const: urn:warehouse:yard-management:events:YardCheckClosed:v1
+            data:
+              $ref: '#/components/schemas/YardCheckClosedData'
+      examples:
+      - name: YardCheckClosed
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000019
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardcheck.YardCheckClosed
+          subject: yck-3a4b5c6d-7e8f-4091-a2b3-c4d5e6f70819
+          time: '2026-11-05T16:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:events:YardCheckClosed:v1
+          data:
+            yard_check_id: yck-3a4b5c6d-7e8f-4091-a2b3-c4d5e6f70819
+            site_id: WH1
+            closed_at: '2026-11-05T16:00:00Z'
+            discrepancies:
+            - kind: MISSING
+              location_code: WH1-YARD-P014
+              trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+              unit_number: TR-1042
+      tags:
+      - name: yardcheck
+    YardCheckClosedAnalytics:
+      name: YardCheckClosed
+      title: YardCheckClosed
+      summary: A yard audit was closed with its discrepancies. Consumed by exception-management (one case per discrepancy).
+      description: '`type` = `com.warehouse.wms.yard-management.yardcheck.YardCheckClosed`; subject and key = `yard_check_id`;
+        dataschema `urn:warehouse:yard-management:analytics:YardCheckClosed:v1`. Byte-identical payload to the integration
+        topic.'
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.yard-management.yardcheck.YardCheckClosed
+            dataschema:
+              const: urn:warehouse:yard-management:analytics:YardCheckClosed:v1
+            data:
+              $ref: '#/components/schemas/YardCheckClosedData'
+      examples:
+      - name: YardCheckClosed
+        payload:
+          specversion: '1.0'
+          id: 7f3c9a52-1b8d-4e6f-9a07-000000000019
+          source: /warehouse/yard-management
+          type: com.warehouse.wms.yard-management.yardcheck.YardCheckClosed
+          subject: yck-3a4b5c6d-7e8f-4091-a2b3-c4d5e6f70819
+          time: '2026-11-05T16:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:yard-management:analytics:YardCheckClosed:v1
+          data:
+            yard_check_id: yck-3a4b5c6d-7e8f-4091-a2b3-c4d5e6f70819
+            site_id: WH1
+            closed_at: '2026-11-05T16:00:00Z'
+            discrepancies:
+            - kind: MISSING
+              location_code: WH1-YARD-P014
+              trailer_id: trl-8f7e6d5c-4b3a-4291-8071-6f5e4d3c2b1a
+              unit_number: TR-1042
+      tags:
+      - name: yardcheck
+    ConsumedDockAppointmentBooked:
+      name: DockAppointmentBooked
+      title: DockAppointmentBooked
+      summary: An appointment was booked; fills the AppointmentView (door, window, ASNs, expected seal).
+      description: An appointment was booked; fills the AppointmentView (door, window, ASNs, expected seal). The producer's
+        own contract, restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked
+            data:
+              $ref: '#/components/schemas/ConsumedDockAppointmentBookedData'
+      examples:
+      - name: DockAppointmentBooked
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-355928311418
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentBooked
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DockAppointmentBooked:v1
+          data:
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            site_id: WH1
+            direction: INBOUND
+            door_code: WH1-DOCK-D01
+            carrier: Acme Freight
+            carrier_scac: ACME
+            window_start: '2026-11-05T14:00:00Z'
+            window_end: '2026-11-05T15:00:00Z'
+            asn_numbers:
+            - ASN-1001
+            expected_seal_number: SL-778
+            provenance: native
+            arrival_tolerance_minutes: 15
+            version: 1
+      tags:
+      - name: consumed
+    ConsumedDockAppointmentRescheduled:
+      name: DockAppointmentRescheduled
+      title: DockAppointmentRescheduled
+      summary: An appointment moved to another window or door.
+      description: An appointment moved to another window or door. The producer's own contract, restated here and never imported
+        (ADR 0003). `type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled
+            data:
+              $ref: '#/components/schemas/ConsumedDockAppointmentRescheduledData'
+      examples:
+      - name: DockAppointmentRescheduled
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-786488181022
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentRescheduled
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DockAppointmentRescheduled:v1
+          data:
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            site_id: WH1
+            door_code: WH1-DOCK-D02
+            window_start: '2026-11-05T15:00:00Z'
+            window_end: '2026-11-05T16:00:00Z'
+            previous_door_code: WH1-DOCK-D01
+            arrival_tolerance_minutes: 15
+            version: 2
+      tags:
+      - name: consumed
+    ConsumedDockAppointmentCancelled:
+      name: DockAppointmentCancelled
+      title: DockAppointmentCancelled
+      summary: An appointment was cancelled; NoShowFreesHolding cancels its open TO_DOOR move.
+      description: An appointment was cancelled; NoShowFreesHolding cancels its open TO_DOOR move. The producer's own contract,
+        restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled
+            data:
+              $ref: '#/components/schemas/ConsumedDockAppointmentCancelledData'
+      examples:
+      - name: DockAppointmentCancelled
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-524407818277
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentCancelled
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DockAppointmentCancelled:v1
+          data:
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            reason: CARRIER_REQUEST
+            version: 2
+      tags:
+      - name: consumed
+    ConsumedDockAppointmentNoShow:
+      name: DockAppointmentNoShow
+      title: DockAppointmentNoShow
+      summary: An appointment became a no-show; NoShowFreesHolding cancels its open TO_DOOR move.
+      description: An appointment became a no-show; NoShowFreesHolding cancels its open TO_DOOR move. The producer's own contract,
+        restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow
+            data:
+              $ref: '#/components/schemas/ConsumedDockAppointmentNoShowData'
+      examples:
+      - name: DockAppointmentNoShow
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-056346249613
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockappointment.DockAppointmentNoShow
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DockAppointmentNoShow:v1
+          data:
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            site_id: WH1
+            door_code: WH1-DOCK-D01
+            direction: INBOUND
+            carrier_scac: ACME
+            window_end: '2026-11-05T15:00:00Z'
+            version: 2
+      tags:
+      - name: consumed
+    ConsumedDoorClosureScheduled:
+      name: DoorClosureScheduled
+      title: DoorClosureScheduled
+      summary: A door closure was scheduled; fills the DoorClosureView. Key = site_id.
+      description: A door closure was scheduled; fills the DoorClosureView. Key = site_id. The producer's own contract, restated
+        here and never imported (ADR 0003). `type` = `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled
+            data:
+              $ref: '#/components/schemas/ConsumedDoorClosureScheduledData'
+      examples:
+      - name: DoorClosureScheduled
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-800549805466
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureScheduled
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DoorClosureScheduled:v1
+          data:
+            site_id: WH1
+            closure_id: clo-6a7b8c9d-0e1f-4203-9415-263748596a7b
+            door_code: WH1-DOCK-D01
+            from: '2026-11-06T08:00:00Z'
+            to: '2026-11-06T12:00:00Z'
+            reason: maintenance
+            version: 1
+      tags:
+      - name: consumed
+    ConsumedDoorClosureLifted:
+      name: DoorClosureLifted
+      title: DoorClosureLifted
+      summary: A door closure was lifted.
+      description: A door closure was lifted. The producer's own contract, restated here and never imported (ADR 0003). `type`
+        = `com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted
+            data:
+              $ref: '#/components/schemas/ConsumedDoorClosureLiftedData'
+      examples:
+      - name: DoorClosureLifted
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-339962558566
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.dockcalendar.DoorClosureLifted
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:DoorClosureLifted:v1
+          data:
+            site_id: WH1
+            closure_id: clo-6a7b8c9d-0e1f-4203-9415-263748596a7b
+            door_code: WH1-DOCK-D01
+            version: 2
+      tags:
+      - name: consumed
+    ConsumedCarrierRegistered:
+      name: CarrierRegistered
+      title: CarrierRegistered
+      summary: A carrier was registered or updated; fills the CarrierView. Key = scac.
+      description: A carrier was registered or updated, the whole snapshot; fills the CarrierView, the local copy of the
+        carrier registry (ADR 0016). Key = scac. The producer's own contract, restated here and never imported (ADR 0003).
+        `type` = `com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered
+            data:
+              $ref: '#/components/schemas/ConsumedCarrierRegisteredData'
+      examples:
+      - name: CarrierRegistered
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-912388457201
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.carrier.CarrierRegistered
+          subject: ACMF
+          time: '2026-11-10T15:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:CarrierRegistered:v1
+          data:
+            scac: ACMF
+            name: ACME Freight
+            usdot: '1234567'
+            mc: MC654321
+            status: ACTIVE
+            reason: null
+            suspended_at: null
+            version: 1
+      tags:
+      - name: consumed
+    ConsumedCarrierSuspended:
+      name: CarrierSuspended
+      title: CarrierSuspended
+      summary: A carrier was suspended; the copy keeps the name and identifiers. Key = scac.
+      description: A carrier was suspended; the copy keeps the name and identifiers and only the standing, the reason and
+        the version change. Key = scac. The producer's own contract, restated here and never imported (ADR 0003). `type`
+        = `com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended
+            data:
+              $ref: '#/components/schemas/ConsumedCarrierSuspendedData'
+      examples:
+      - name: CarrierSuspended
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-528850146632
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended
+          subject: ACMF
+          time: '2026-11-10T15:30:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:CarrierSuspended:v1
+          data:
+            scac: ACMF
+            reason: insurance lapsed
+            suspended_at: '2026-11-10T15:30:00Z'
+            version: 2
+      tags:
+      - name: consumed
+    ConsumedCarrierReinstated:
+      name: CarrierReinstated
+      title: CarrierReinstated
+      summary: A suspended carrier was reinstated. Key = scac.
+      description: A suspended carrier was reinstated; the standing becomes ACTIVE and the suspension reason is cleared.
+        Key = scac. The producer's own contract, restated here and never imported (ADR 0003). `type`
+        = `com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated
+            data:
+              $ref: '#/components/schemas/ConsumedCarrierReinstatedData'
+      examples:
+      - name: CarrierReinstated
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-736143055847
+          source: /warehouse/dock-scheduling
+          type: com.warehouse.wms.dock-scheduling.carrier.CarrierReinstated
+          subject: ACMF
+          time: '2026-11-10T16:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:dock-scheduling:events:CarrierReinstated:v1
+          data:
+            scac: ACMF
+            reinstated_at: '2026-11-10T16:00:00Z'
+            version: 3
+      tags:
+      - name: consumed
+    ConsumedZoneRegistered:
+      name: ZoneRegistered
+      title: ZoneRegistered
+      summary: A zone exists in a site; maps a location's zone to its siteCode. camelCase payload.
+      description: A zone exists in a site; maps a location's zone to its siteCode. camelCase payload. The producer's own
+        contract, restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.facility-layout.zone.ZoneRegistered`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.facility-layout.zone.ZoneRegistered
+            data:
+              $ref: '#/components/schemas/ConsumedZoneRegisteredData'
+      examples:
+      - name: ZoneRegistered
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-251426959712
+          source: /warehouse/facility-layout
+          type: com.warehouse.wms.facility-layout.zone.ZoneRegistered
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:facility-layout:events:ZoneRegistered:v1
+          data:
+            zoneId: zone-1
+            siteCode: WH1
+            areaCode: YARD
+            zoneCode: Y1
+      tags:
+      - name: consumed
+    ConsumedLocationSlotRegistered:
+      name: LocationSlotRegistered
+      title: LocationSlotRegistered
+      summary: A slot exists; role Yard is a spot, role Dock is a door. camelCase payload.
+      description: A slot exists; role Yard is a spot, role Dock is a door. camelCase payload. The producer's own contract,
+        restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered
+            data:
+              $ref: '#/components/schemas/ConsumedLocationSlotRegisteredData'
+      examples:
+      - name: LocationSlotRegistered
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-298885975019
+          source: /warehouse/facility-layout
+          type: com.warehouse.wms.facility-layout.locationslot.LocationSlotRegistered
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:facility-layout:events:LocationSlotRegistered:v1
+          data:
+            locationCode: WH1-DOCK-D01
+            zoneId: zone-2
+            role: Dock
+            dockFlow: Both
+      tags:
+      - name: consumed
+    ConsumedLocationSlotDecommissioned:
+      name: LocationSlotDecommissioned
+      title: LocationSlotDecommissioned
+      summary: A slot was permanently retired. camelCase payload.
+      description: A slot was permanently retired. camelCase payload. The producer's own contract, restated here and never
+        imported (ADR 0003). `type` = `com.warehouse.wms.facility-layout.locationslot.LocationSlotDecommissioned`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.facility-layout.locationslot.LocationSlotDecommissioned
+            data:
+              $ref: '#/components/schemas/ConsumedLocationSlotDecommissionedData'
+      examples:
+      - name: LocationSlotDecommissioned
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-128733662010
+          source: /warehouse/facility-layout
+          type: com.warehouse.wms.facility-layout.locationslot.LocationSlotDecommissioned
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:facility-layout:events:LocationSlotDecommissioned:v1
+          data:
+            locationCode: WH1-YARD-P014
+      tags:
+      - name: consumed
+    ConsumedASNRegistered:
+      name: ASNRegistered
+      title: ASNRegistered
+      summary: An ASN exists; fills the AsnContentView (what an inbound trailer holds).
+      description: An ASN exists; fills the AsnContentView (what an inbound trailer holds). The producer's own contract, restated
+        here and never imported (ADR 0003). `type` = `com.warehouse.wms.inbound-receiving.asn.ASNRegistered`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.inbound-receiving.asn.ASNRegistered
+            data:
+              $ref: '#/components/schemas/ConsumedASNRegisteredData'
+      examples:
+      - name: ASNRegistered
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-747025456551
+          source: /warehouse/inbound-receiving
+          type: com.warehouse.wms.inbound-receiving.asn.ASNRegistered
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:inbound-receiving:events:ASNRegistered:v1
+          data:
+            asn_number: ASN-1001
+            lines:
+            - line_no: 1
+              sku: SKU-1
+              quantity: 10
+            expected_arrival: '2026-11-05T14:00:00Z'
+      tags:
+      - name: consumed
+    ConsumedASNCancelled:
+      name: ASNCancelled
+      title: ASNCancelled
+      summary: An ASN was cancelled; removes it from the AsnContentView.
+      description: An ASN was cancelled; removes it from the AsnContentView. The producer's own contract, restated here and
+        never imported (ADR 0003). `type` = `com.warehouse.wms.inbound-receiving.asn.ASNCancelled`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.inbound-receiving.asn.ASNCancelled
+            data:
+              $ref: '#/components/schemas/ConsumedASNCancelledData'
+      examples:
+      - name: ASNCancelled
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-203394690886
+          source: /warehouse/inbound-receiving
+          type: com.warehouse.wms.inbound-receiving.asn.ASNCancelled
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:inbound-receiving:events:ASNCancelled:v1
+          data:
+            asn_number: ASN-1001
+      tags:
+      - name: consumed
+    ConsumedReceiptOpened:
+      name: ReceiptOpened
+      title: ReceiptOpened
+      summary: A receipt opened at a door; fills the ReceiptAtDoorView.
+      description: A receipt opened at a door; fills the ReceiptAtDoorView. The producer's own contract, restated here and
+        never imported (ADR 0003). `type` = `com.warehouse.wms.inbound-receiving.receipt.ReceiptOpened`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.inbound-receiving.receipt.ReceiptOpened
+            data:
+              $ref: '#/components/schemas/ConsumedReceiptOpenedData'
+      examples:
+      - name: ReceiptOpened
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-270980029624
+          source: /warehouse/inbound-receiving
+          type: com.warehouse.wms.inbound-receiving.receipt.ReceiptOpened
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:inbound-receiving:events:ReceiptOpened:v1
+          data:
+            receipt_id: rcpt-1
+            asn_number: ASN-1001
+            appointment_id: appt-0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            door_code: WH1-DOCK-D01
+            opened_at: '2026-11-05T14:12:00Z'
+      tags:
+      - name: consumed
+    ConsumedReceiptClosed:
+      name: ReceiptClosed
+      title: ReceiptClosed
+      summary: A receipt closed; AutoCompleteUnload completes the door work of the trailer docked on its appointment.
+      description: A receipt closed; AutoCompleteUnload completes the door work of the trailer docked on its appointment.
+        The producer's own contract, restated here and never imported (ADR 0003). `type` = `com.warehouse.wms.inbound-receiving.receipt.ReceiptClosed`.
+      contentType: application/cloudevents+json
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/CloudEventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: com.warehouse.wms.inbound-receiving.receipt.ReceiptClosed
+            data:
+              $ref: '#/components/schemas/ConsumedReceiptClosedData'
+      examples:
+      - name: ReceiptClosed
+        payload:
+          specversion: '1.0'
+          id: c1d2e3f4-0000-4000-8000-040584022590
+          source: /warehouse/inbound-receiving
+          type: com.warehouse.wms.inbound-receiving.receipt.ReceiptClosed
+          subject: subject-1
+          time: '2026-11-05T13:00:00Z'
+          datacontenttype: application/json
+          dataschema: urn:warehouse:inbound-receiving:events:ReceiptClosed:v1
+          data:
+            receipt_id: rcpt-1
+            asn_number: ASN-1001
+            closed_at: '2026-11-05T15:20:00Z'
+            discrepancies: []
+      tags:
+      - name: consumed
+  schemas:
+    Location:
+      type: object
+      required:
+      - kind
+      - code
+      properties:
+        kind:
+          type: string
+          enum:
+          - SPOT
+          - DOOR
+        code:
+          type: string
+          description: A facility-layout locationCode.
+    CloudEventEnvelope:
+      type: object
+      required:
+      - specversion
+      - id
+      - source
+      - type
+      - subject
+      - time
+      - datacontenttype
+      - dataschema
+      - data
+      properties:
+        specversion:
+          type: string
+          const: '1.0'
+        id:
+          type: string
+          description: UUID minted once per occurrence; stable across relay retries. Dedupe on it.
+        source:
+          type: string
+        type:
+          type: string
+        subject:
+          type: string
+        time:
+          type: string
+          format: date-time
+        datacontenttype:
+          type: string
+          const: application/json
+        dataschema:
+          type: string
+        data:
+          type: object
+    VisitCheckedInData:
+      type: object
+      required:
+      - visit_id
+      - site_id
+      - carrier
+      - carrier_scac
+      - purpose
+      - appointment_id
+      - trailers
+      - arrived_at
+      - version
+      properties:
+        visit_id:
+          type: string
+        site_id:
+          type: string
+        carrier:
+          type: string
+        carrier_scac:
+          type:
+          - string
+          - 'null'
+        purpose:
+          type: string
+          enum:
+          - DROP
+          - LIVE_UNLOAD
+          - LIVE_LOAD
+          - PICKUP
+          - BOBTAIL
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        carrier_flag:
+          type:
+          - string
+          - 'null'
+          enum:
+          - SUSPENDED
+          - null
+          description: Additive (ADR 0016). SUSPENDED when the gate admitted the visit of a carrier dock-scheduling has suspended, under the FLAG action of the yard policy; null otherwise.
+        trailers:
+          type: array
+          items:
+            type: object
+            required:
+            - trailer_id
+            - unit_number
+            - carrier_scac
+            - kind
+            - load_state
+            properties:
+              trailer_id:
+                type: string
+              unit_number:
+                type: string
+              carrier_scac:
+                type:
+                - string
+                - 'null'
+              kind:
+                type: string
+                enum:
+                - DRY_VAN
+                - REEFER
+                - FLATBED
+                - CONTAINER
+              load_state:
+                type: string
+                enum:
+                - EMPTY
+                - LOADED
+                - PARTIAL
+              unit_number_scheme:
+                type:
+                - string
+                - 'null'
+                enum:
+                - ISO6346
+                - null
+                description: Additive, optional. ISO6346 when the unit number was validated as an ISO 6346 container number
+                  (a CONTAINER kind always is, any other kind when the caller declared the scheme); null for a free-form number.
+              seal_class:
+                type:
+                - string
+                - 'null'
+                enum:
+                - I
+                - S
+                - H
+                - null
+                description: Additive, optional. The ISO 17712 class declared for the seal (I indicative, S security, H high
+                  security); null when none was declared. A seal number is not part of this event.
+              hazmat_class:
+                type:
+                - string
+                - 'null'
+                enum:
+                - '1'
+                - '1.1'
+                - '1.2'
+                - '1.3'
+                - '1.4'
+                - '1.5'
+                - '1.6'
+                - '2'
+                - '2.1'
+                - '2.2'
+                - '2.3'
+                - '3'
+                - '4'
+                - '4.1'
+                - '4.2'
+                - '4.3'
+                - '5'
+                - '5.1'
+                - '5.2'
+                - '6'
+                - '6.1'
+                - '6.2'
+                - '7'
+                - '8'
+                - '9'
+                - null
+                description: Additive, optional. The US DOT hazard class or division the shipper declared for the trailer (ADR 0014); null when none.
+              un_number:
+                type:
+                - string
+                - 'null'
+                pattern: ^UN[0-9]{4}$
+                description: Additive, optional. The UN number of the material, `UN` and four digits; null when none was declared.
+              requires_temperature_control:
+                type: boolean
+                description: Additive, optional. True for a load that needs a refrigeration plug; false when not declared.
+        arrived_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    VisitRejectedData:
+      type: object
+      required:
+      - visit_id
+      - site_id
+      - carrier_scac
+      - appointment_id
+      - reason
+      - rejected_at
+      properties:
+        visit_id:
+          type: string
+        site_id:
+          type: string
+        carrier_scac:
+          type:
+          - string
+          - 'null'
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        reason:
+          type: string
+          enum:
+          - APPOINTMENT_REQUIRED
+          - UNKNOWN_APPOINTMENT
+          - SEAL_MISMATCH
+          - TRAILER_ALREADY_ON_SITE
+          - SITE_REQUEST
+          - CARRIER_SUSPENDED
+        rejected_at:
+          type: string
+          format: date-time
+    VisitCheckedOutData:
+      type: object
+      required:
+      - visit_id
+      - site_id
+      - trailers_out
+      - departed_at
+      - on_site_minutes
+      - version
+      properties:
+        visit_id:
+          type: string
+        site_id:
+          type: string
+        trailers_out:
+          type: array
+          items:
+            type: string
+          description: Trailer ids that left with the tractor.
+        departed_at:
+          type: string
+          format: date-time
+        on_site_minutes:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 2
+    TrailerDockedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - appointment_id
+      - asn_numbers
+      - visit_id
+      - docked_at
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        asn_numbers:
+          type: array
+          items:
+            type: string
+          description: May be empty.
+        visit_id:
+          type:
+          - string
+          - 'null'
+        docked_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+        seal_state:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INTACT
+          - BROKEN
+          - APPLIED
+          - VERIFIED
+          - MISMATCH
+          - null
+          description: Additive, optional. The state of the seal on the trailer, null when it has none. INTACT is present and
+            unbroken, not yet verified; APPLIED was recorded as applied at the origin or dock; VERIFIED matched the expected
+            seal at the gate; MISMATCH differed from it; BROKEN was found broken.
+        seal_class:
+          type:
+          - string
+          - 'null'
+          enum:
+          - I
+          - S
+          - H
+          - null
+          description: Additive, optional. The ISO 17712 class of the seal (I, S or H); null when none was declared.
+        hazmat_class:
+          type:
+          - string
+          - 'null'
+          enum:
+          - '1'
+          - '1.1'
+          - '1.2'
+          - '1.3'
+          - '1.4'
+          - '1.5'
+          - '1.6'
+          - '2'
+          - '2.1'
+          - '2.2'
+          - '2.3'
+          - '3'
+          - '4'
+          - '4.1'
+          - '4.2'
+          - '4.3'
+          - '5'
+          - '5.1'
+          - '5.2'
+          - '6'
+          - '6.1'
+          - '6.2'
+          - '7'
+          - '8'
+          - '9'
+          - null
+          description: Additive, optional. The US DOT hazard class or division the shipper declared for the trailer (ADR 0014); null when none.
+        un_number:
+          type:
+          - string
+          - 'null'
+          pattern: ^UN[0-9]{4}$
+          description: Additive, optional. The UN number of the material, `UN` and four digits; null when none was declared.
+        requires_temperature_control:
+          type: boolean
+          description: Additive, optional. True for a load that needs a refrigeration plug; false when not declared.
+    TrailerUndockedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - appointment_id
+      - undocked_at
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        undocked_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    TrailerParkedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - spot_code
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        spot_code:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+    DoorWorkStartedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - appointment_id
+      - started_at
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        started_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    DoorWorkCompletedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - appointment_id
+      - completed_at
+      - load_state
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        completed_at:
+          type: string
+          format: date-time
+        load_state:
+          type: string
+          enum:
+          - EMPTY
+          - LOADED
+          - PARTIAL
+        version:
+          type: integer
+          minimum: 1
+    TrailerDepartedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - visit_id
+      - departed_at
+      - dwell_minutes
+      - load_state
+      - seal_number
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        visit_id:
+          type:
+          - string
+          - 'null'
+        departed_at:
+          type: string
+          format: date-time
+        dwell_minutes:
+          type: integer
+          minimum: 0
+        load_state:
+          type: string
+          enum:
+          - EMPTY
+          - LOADED
+          - PARTIAL
+        seal_number:
+          type:
+          - string
+          - 'null'
+        version:
+          type: integer
+          minimum: 1
+        seal_state:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INTACT
+          - BROKEN
+          - APPLIED
+          - VERIFIED
+          - MISMATCH
+          - null
+          description: Additive, optional. The state of the seal on the trailer, null when it has none. INTACT is present and
+            unbroken, not yet verified; APPLIED was recorded as applied at the origin or dock; VERIFIED matched the expected
+            seal at the gate; MISMATCH differed from it; BROKEN was found broken.
+        seal_class:
+          type:
+          - string
+          - 'null'
+          enum:
+          - I
+          - S
+          - H
+          - null
+          description: Additive, optional. The ISO 17712 class of the seal (I, S or H); null when none was declared.
+    TrailerSecuredData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - method
+      - secured_at
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        method:
+          type: string
+          enum:
+          - RESTRAINT
+          - WHEEL_CHOCKS
+          description: A vehicle restraint engaged, or the wheels chocked (OSHA 29 CFR 1910.178(k)(1), ANSI MH30.3, EN 1398).
+        secured_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    TrailerSecuringReleasedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - door_code
+      - released_at
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        released_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    SealExceptionRaisedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - appointment_id
+      - expected_seal_number
+      - found_seal_number
+      - raised_at
+      properties:
+        trailer_id:
+          type:
+          - string
+          - 'null'
+          description: Null when the visit was rejected at the gate (no trailer was persisted).
+        site_id:
+          type: string
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        expected_seal_number:
+          type: string
+        found_seal_number:
+          type: string
+        raised_at:
+          type: string
+          format: date-time
+    TrailerDwellExceededData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - kind
+      - dwell_minutes
+      - threshold_minutes
+      - location_code
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        kind:
+          type: string
+          enum:
+          - DRY_VAN
+          - REEFER
+          - FLATBED
+          - CONTAINER
+        dwell_minutes:
+          type: integer
+          minimum: 0
+        threshold_minutes:
+          type: integer
+          minimum: 1
+        location_code:
+          type:
+          - string
+          - 'null'
+    TrailerHeldData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - reason
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        reason:
+          type: string
+          enum:
+          - DAMAGED
+          - SEAL_BROKEN
+          - NOT_FOUND
+          - QUALITY
+          - SECURITY
+        version:
+          type: integer
+          minimum: 1
+    TrailerHoldReleasedData:
+      type: object
+      required:
+      - trailer_id
+      - site_id
+      - version
+      properties:
+        trailer_id:
+          type: string
+        site_id:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+    YardMoveRequestedData:
+      type: object
+      required:
+      - move_id
+      - site_id
+      - trailer_id
+      - performer
+      - from_location
+      - to_location
+      - reason
+      - appointment_id
+      - due_by
+      - version
+      properties:
+        move_id:
+          type: string
+        site_id:
+          type: string
+        trailer_id:
+          type: string
+        performer:
+          type: string
+          enum:
+          - HOSTLER
+          - VISITING_DRIVER
+        from_location:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Location'
+        to_location:
+          $ref: '#/components/schemas/Location'
+        reason:
+          type: string
+          enum:
+          - TO_DOOR
+          - FROM_DOOR
+          - TO_SPOT
+          - RELOCATE
+          - TO_HOLDING
+        appointment_id:
+          type:
+          - string
+          - 'null'
+        due_by:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    YardMoveClaimedData:
+      type: object
+      required:
+      - move_id
+      - site_id
+      - hostler_ref
+      - claimed_at
+      - version
+      properties:
+        move_id:
+          type: string
+        site_id:
+          type: string
+        hostler_ref:
+          type: string
+        claimed_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 2
+    YardMoveLeaseExpiredData:
+      type: object
+      required:
+      - move_id
+      - site_id
+      - hostler_ref
+      - version
+      properties:
+        move_id:
+          type: string
+        site_id:
+          type: string
+        hostler_ref:
+          type: string
+        version:
+          type: integer
+          minimum: 2
+    YardMoveCompletedData:
+      type: object
+      required:
+      - move_id
+      - site_id
+      - trailer_id
+      - performer
+      - hostler_ref
+      - from_location
+      - to_location
+      - actual_location
+      - reason
+      - completed_at
+      - duration_seconds
+      - version
+      properties:
+        move_id:
+          type: string
+        site_id:
+          type: string
+        trailer_id:
+          type: string
+        performer:
+          type: string
+          enum:
+          - HOSTLER
+          - VISITING_DRIVER
+        hostler_ref:
+          type:
+          - string
+          - 'null'
+        from_location:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Location'
+        to_location:
+          $ref: '#/components/schemas/Location'
+        actual_location:
+          $ref: '#/components/schemas/Location'
+        reason:
+          type: string
+          enum:
+          - TO_DOOR
+          - FROM_DOOR
+          - TO_SPOT
+          - RELOCATE
+          - TO_HOLDING
+        completed_at:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 2
+    YardMoveCancelledData:
+      type: object
+      required:
+      - move_id
+      - site_id
+      - reason
+      - version
+      properties:
+        move_id:
+          type: string
+        site_id:
+          type: string
+        reason:
+          type: string
+        version:
+          type: integer
+          minimum: 2
+    InspectionCompletedData:
+      type: object
+      required:
+      - inspection_id
+      - site_id
+      - trailer_id
+      - visit_id
+      - template_id
+      - template_version
+      - gate
+      - outcome
+      - condition_grade
+      - completed_at
+      - failed_item_codes
+      properties:
+        inspection_id:
+          type: string
+        site_id:
+          type: string
+        trailer_id:
+          type: string
+        visit_id:
+          type:
+          - string
+          - 'null'
+        template_id:
+          type: string
+        template_version:
+          type: integer
+          minimum: 1
+          description: The version of the template the inspection was opened from (a snapshot; later versions never rewrite it).
+        gate:
+          type: string
+          enum:
+          - PRE_DOCK
+          - PRE_LOAD
+          - PRE_DEPARTURE
+          - ON_DEMAND
+        outcome:
+          type: string
+          enum:
+          - PASSED
+          - FAILED
+        condition_grade:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CLEAN
+          - DIRTY
+          - ODOUR
+          - DAMAGED
+          - null
+        completed_at:
+          type: string
+          format: date-time
+        failed_item_codes:
+          type: array
+          items:
+            type: string
+          description: Empty for a PASSED inspection.
+    InspectionFailedData:
+      type: object
+      required:
+      - inspection_id
+      - site_id
+      - trailer_id
+      - template_id
+      - gate
+      - failed_items
+      - failed_at
+      - hold_placed
+      properties:
+        inspection_id:
+          type: string
+        site_id:
+          type: string
+        trailer_id:
+          type: string
+        template_id:
+          type: string
+        gate:
+          type: string
+          enum:
+          - PRE_DOCK
+          - PRE_LOAD
+          - PRE_DEPARTURE
+          - ON_DEMAND
+        failed_items:
+          type: array
+          description: Every item that recorded FAIL, in template order.
+          items:
+            type: object
+            required:
+            - item_code
+            - note
+            - required
+            properties:
+              item_code:
+                type: string
+              note:
+                type:
+                - string
+                - 'null'
+              required:
+                type: boolean
+        failed_at:
+          type: string
+          format: date-time
+        hold_placed:
+          type: boolean
+          description: true when this inspection placed a hold on the trailer; false when the trailer was already held.
+    YardCheckClosedData:
+      type: object
+      required:
+      - yard_check_id
+      - site_id
+      - closed_at
+      - discrepancies
+      properties:
+        yard_check_id:
+          type: string
+        site_id:
+          type: string
+        closed_at:
+          type: string
+          format: date-time
+        discrepancies:
+          type: array
+          items:
+            type: object
+            required:
+            - kind
+            - location_code
+            - trailer_id
+            - unit_number
+            properties:
+              kind:
+                type: string
+                enum:
+                - MISSING
+                - UNEXPECTED
+                - WRONG_LOCATION
+              location_code:
+                type: string
+              trailer_id:
+                type:
+                - string
+                - 'null'
+              unit_number:
+                type:
+                - string
+                - 'null'
+          description: Empty when the audit matched the model.
+    ConsumedDockAppointmentBookedData:
+      type: object
+      required:
+      - appointment_id
+      - site_id
+      - direction
+      - door_code
+      - carrier
+      - window_start
+      - window_end
+      - arrival_tolerance_minutes
+      - version
+      properties:
+        appointment_id:
+          type: string
+        site_id:
+          type: string
+        direction:
+          type: string
+          enum:
+          - INBOUND
+          - OUTBOUND
+        door_code:
+          type: string
+        carrier:
+          type: string
+        carrier_scac:
+          type:
+          - string
+          - 'null'
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        asn_numbers:
+          type: array
+          items:
+            type: string
+        cpt_id:
+          type:
+          - string
+          - 'null'
+        shipment_refs:
+          type: array
+          items:
+            type: string
+        expected_seal_number:
+          type:
+          - string
+          - 'null'
+        provenance:
+          type: string
+        arrival_tolerance_minutes:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 1
+    ConsumedDockAppointmentRescheduledData:
+      type: object
+      required:
+      - appointment_id
+      - site_id
+      - door_code
+      - window_start
+      - window_end
+      - arrival_tolerance_minutes
+      - version
+      properties:
+        appointment_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        previous_window_start:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        previous_window_end:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        previous_door_code:
+          type:
+          - string
+          - 'null'
+        arrival_tolerance_minutes:
+          type: integer
+          minimum: 0
+        version:
+          type: integer
+          minimum: 1
+    ConsumedDockAppointmentCancelledData:
+      type: object
+      required:
+      - appointment_id
+      - site_id
+      - door_code
+      - version
+      properties:
+        appointment_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        reason:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+    ConsumedDockAppointmentNoShowData:
+      type: object
+      required:
+      - appointment_id
+      - site_id
+      - door_code
+      - version
+      properties:
+        appointment_id:
+          type: string
+        site_id:
+          type: string
+        door_code:
+          type: string
+        direction:
+          type: string
+        carrier_scac:
+          type:
+          - string
+          - 'null'
+        window_end:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    ConsumedDoorClosureScheduledData:
+      type: object
+      required:
+      - site_id
+      - closure_id
+      - door_code
+      - from
+      - to
+      - version
+      properties:
+        site_id:
+          type: string
+        closure_id:
+          type: string
+        door_code:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+    ConsumedDoorClosureLiftedData:
+      type: object
+      required:
+      - site_id
+      - closure_id
+      - door_code
+      - version
+      properties:
+        site_id:
+          type: string
+        closure_id:
+          type: string
+        door_code:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+    ConsumedCarrierRegisteredData:
+      type: object
+      required:
+      - scac
+      - version
+      properties:
+        scac:
+          type: string
+        name:
+          type:
+          - string
+          - 'null'
+        usdot:
+          type:
+          - string
+          - 'null'
+        mc:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+        reason:
+          type:
+          - string
+          - 'null'
+          description: null on a registration; the copy stores it as ''.
+        suspended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reinstated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    ConsumedCarrierSuspendedData:
+      type: object
+      required:
+      - scac
+      - version
+      properties:
+        scac:
+          type: string
+        reason:
+          type: string
+        suspended_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    ConsumedCarrierReinstatedData:
+      type: object
+      required:
+      - scac
+      - version
+      properties:
+        scac:
+          type: string
+        reinstated_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    ConsumedZoneRegisteredData:
+      type: object
+      required:
+      - zoneId
+      - siteCode
+      properties:
+        zoneId:
+          type: string
+        siteCode:
+          type: string
+        areaCode:
+          type: string
+        zoneCode:
+          type: string
+    ConsumedLocationSlotRegisteredData:
+      type: object
+      required:
+      - locationCode
+      - zoneId
+      properties:
+        locationCode:
+          type: string
+        zoneId:
+          type: string
+        role:
+          type: string
+          description: 'Absent on old events: treat as Storage.'
+        dockFlow:
+          type: string
+          description: Inbound, Outbound or Both; present only for role Dock.
+        spotKind:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PARKING
+          - HOLDING
+          - REEFER_PLUG
+          - HAZMAT
+          - STAGING_LANE
+          - null
+          description: Optional (facility-layout ADR 0045), on a Yard slot only. What the spot is for; the yard stores it and judges the placement
+            of a trailer that declares a hazard class or a temperature-control need by it (ADR 0014). Absent or null, and any value this
+            service does not know, are read as an unclassified spot, judged exactly as before.
+        gln:
+          type:
+          - string
+          - 'null'
+          description: Optional (facility-layout ADR 0045). The GS1 Global Location Number of the slot; the yard ignores it.
+    ConsumedLocationSlotDecommissionedData:
+      type: object
+      required:
+      - locationCode
+      properties:
+        locationCode:
+          type: string
+    ConsumedASNRegisteredData:
+      type: object
+      required:
+      - asn_number
+      - lines
+      properties:
+        asn_number:
+          type: string
+        lines:
+          type: array
+          items:
+            type: object
+        expected_arrival:
+          type: string
+          format: date-time
+    ConsumedASNCancelledData:
+      type: object
+      required:
+      - asn_number
+      properties:
+        asn_number:
+          type: string
+        reason:
+          type: string
+    ConsumedReceiptOpenedData:
+      type: object
+      required:
+      - receipt_id
+      - asn_number
+      properties:
+        receipt_id:
+          type: string
+        asn_number:
+          type: string
+        appointment_id:
+          type: string
+        door_code:
+          type: string
+        opened_at:
+          type: string
+          format: date-time
+    ConsumedReceiptClosedData:
+      type: object
+      required:
+      - receipt_id
+      - asn_number
+      - closed_at
+      properties:
+        receipt_id:
+          type: string
+        asn_number:
+          type: string
+        closed_at:
+          type: string
+          format: date-time
+        discrepancies:
+          type: array
+          items:
+            type: object

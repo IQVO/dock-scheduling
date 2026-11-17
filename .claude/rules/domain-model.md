@@ -41,7 +41,8 @@ Problem slug = kebab-case of the error name without `Err` (`ErrDoorDoubleBooked`
 
 Booked, Rescheduled, Cancelled, NoShow, DoorReassigned (integration + analytics, ADR 0010) for DockAppointment;
 CheckedIn, Completed, AtRisk are analytics-only; DoorClosureScheduled, DoorClosureLifted,
-DoorOperatingHoursDeclared for DockCalendar. Catalogue: `docs/adr/0004-cloudevents-catalogue.md`.
+DoorOperatingHoursDeclared for DockCalendar; CarrierRegistered, CarrierSuspended, CarrierReinstated for Carrier (the
+carrier registry keyed by SCAC, integration + analytics, ADR 0012). Catalogue: `docs/adr/0004-cloudevents-catalogue.md`.
 
 ## Key use cases (`internal/application/usecases`)
 

@@ -76,13 +76,18 @@ func NewRouter(s *Server) http.Handler {
 	r.With(keyed).Post("/sites/{siteId}/dock-calendar/closures", s.handleScheduleClosure)
 	r.With(keyed).Post("/sites/{siteId}/dock-calendar/closures/{closureId}/lifts", s.handleLiftClosure)
 
+	r.Get("/carriers", s.handleListCarriers)
+	r.Put("/carriers/{scac}", s.handlePutCarrier)
+	r.Get("/carriers/{scac}", s.handleGetCarrier)
+	r.With(keyed).Patch("/carriers/{scac}", s.handlePatchCarrier)
+	r.With(keyed).Post("/carriers/{scac}/suspensions", s.handleSuspendCarrier)
+	r.With(keyed).Post("/carriers/{scac}/reinstatements", s.handleReinstateCarrier)
+
 	r.With(s.keyed(true)).Post("/no-show-sweeps", s.handleNoShowSweep)
 	// The reports (GET /reports/*) are served by cmd/reports (NewReportsRouter).
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeProblem(w, r, notFoundResource, "no such path") })
-	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problem{http.StatusMethodNotAllowed, "method-not-allowed", "Method not allowed"}, "the method is not supported on this path")
-	})
+	r.MethodNotAllowed(methodNotAllowedFor(r))
 	return r
 }
 

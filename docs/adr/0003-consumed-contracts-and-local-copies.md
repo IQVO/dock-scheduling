@@ -6,6 +6,7 @@ error naming the variable), CloudEvents `id` claimed in `processed_events` in th
 FULL `type`, unknown types and unknown fields ignored, a message of a handled type that can never be applied is dead-lettered to
 `<consumed topic>.dlq` (headers `x-dlq-source-topic`, `x-dlq-cause`), the offset committed after the transaction; a transient failure
 is retried on the same message with capped exponential backoff.
+Amended in part: the inbound-receiving legacy `dockappointment.*` consumed row and `DOCK_LEGACY_IMPORT_CONSUMER_GROUP` were removed by ADR 0011.
 
 The types, topics and fields below were READ from each producer's `origin/develop:apis/asyncapi.yaml` on 2026-11-05 (yard-management
 has no contract on develop yet: its three events are pinned by the cross-context contract of the yard build).

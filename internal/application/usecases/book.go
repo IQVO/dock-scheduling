@@ -23,6 +23,7 @@ import (
 type Deps struct {
 	Appointments ports.AppointmentRepo
 	Calendars    ports.CalendarRepo
+	Carriers     ports.CarrierRepo
 	Doors        ports.DoorView
 	Asns         ports.AsnView
 	Cutoffs      ports.CutoffView
@@ -86,6 +87,9 @@ func (s *Service) BookAppointment(ctx context.Context, cmd BookCommand) (views.A
 			Rules: rulesOf(cal.Settings()), Now: now,
 		})
 		if err != nil {
+			return err
+		}
+		if err := s.checkCarrierMayBook(ctx, a.Carrier().SCAC()); err != nil {
 			return err
 		}
 		if err := s.checkNew(ctx, a, door, cal, ""); err != nil {
@@ -219,6 +223,9 @@ func (s *Service) RescheduleAppointment(ctx context.Context, cmd RescheduleComma
 		}
 		events, err := a.Reschedule(cmd.DoorCode, cmd.WindowStart, cmd.WindowEnd, rulesOf(cal.Settings()), s.d.Clock.Now())
 		if err != nil {
+			return err
+		}
+		if err := s.checkCarrierMayBook(ctx, a.Carrier().SCAC()); err != nil {
 			return err
 		}
 		if err := s.checkNew(ctx, a, door, cal, a.ID().String()); err != nil {

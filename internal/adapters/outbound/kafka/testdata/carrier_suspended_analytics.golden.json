@@ -1,0 +1,16 @@
+{
+  "specversion": "1.0",
+  "id": "b8a79685-7463-4e52-8d41-30f2e1d0c9ba",
+  "source": "/warehouse/dock-scheduling",
+  "type": "com.warehouse.wms.dock-scheduling.carrier.CarrierSuspended",
+  "subject": "ACMF",
+  "time": "2026-11-10T15:30:00Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:warehouse:dock-scheduling:analytics:CarrierSuspended:v1",
+  "data": {
+    "scac": "ACMF",
+    "reason": "insurance lapsed",
+    "suspended_at": "2026-11-10T15:30:00Z",
+    "version": 2
+  }
+}

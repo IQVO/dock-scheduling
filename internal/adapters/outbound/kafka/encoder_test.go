@@ -28,6 +28,7 @@ import (
 const (
 	apptID = "appt-123e4567-e89b-12d3-a456-426614174000"
 	siteID = "WH1"
+	scac   = "ACMF"
 )
 
 func at(day, h, m, s int) time.Time { return time.Date(2026, 11, day, h, m, s, 0, time.UTC) }
@@ -56,6 +57,9 @@ func goldenCases() []goldenCase {
 		{"DoorClosureScheduled", "dockcalendar", siteID, "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", at(5, 15, 0, 0), true},
 		{"DoorClosureLifted", "dockcalendar", siteID, "5d4c3b2a-1f0e-4d9c-ab8a-7f6e5d4c3b2a", at(7, 9, 0, 0), true},
 		{"DoorOperatingHoursDeclared", "dockcalendar", siteID, "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", at(5, 11, 0, 0), false},
+		{"CarrierRegistered", "carrier", scac, "7c6b5a49-3827-4f16-9e05-d4c3b2a19f8e", at(10, 14, 0, 0), true}, // ADR 0012
+		{"CarrierSuspended", "carrier", scac, "b8a79685-7463-4e52-8d41-30f2e1d0c9ba", at(10, 15, 30, 0), true},
+		{"CarrierReinstated", "carrier", scac, "e9f8a7b6-c5d4-4e3f-a2b1-0c9d8e7f6a5b", at(11, 9, 0, 0), true},
 	}
 }
 

@@ -58,7 +58,7 @@ func (d doors) Door(ctx context.Context, code shared.DoorCode) (out *dockappoint
 		if !ok || !zoned {
 			return
 		}
-		out = &dockappointment.Door{Code: code, Site: shared.SiteID(site), Flow: row.flow}
+		out = &dockappointment.Door{Code: code, Site: shared.SiteID(site), Flow: row.flow, GLN: shared.GLN(row.gln)}
 	})
 	return out, nil
 }
@@ -68,8 +68,13 @@ func (d doors) UpsertZone(ctx context.Context, zoneID, siteCode string) error {
 	return nil
 }
 
-func (d doors) UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow) error {
-	d.s.locked(ctx, func() { d.s.st.doors[code] = door{zoneID: zoneID, flow: flow} })
+func (d doors) UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow, gln string) error {
+	d.s.locked(ctx, func() {
+		if gln == "" {
+			gln = d.s.st.doors[code].gln // a re-registration without a GLN keeps the known one
+		}
+		d.s.st.doors[code] = door{zoneID: zoneID, flow: flow, gln: gln}
+	})
 	return nil
 }
 

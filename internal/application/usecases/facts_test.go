@@ -16,26 +16,26 @@ func TestFacilityConsumers(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH3"))
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d == nil || d.Site != "WH3" || d.Flow != shared.FlowBoth {
 		t.Fatalf("door = %+v", d)
 	}
 	// a re-registration with another role removes the door
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Storage", ""))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Storage", "", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d != nil {
 		t.Fatalf("a non-dock slot is no door: %+v", d)
 	}
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Inbound"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Inbound", ""))
 	must(t, e.svc.ConsumeSlotDecommissioned(ctx, "s3", "D-NEW"))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d != nil {
 		t.Fatalf("decommissioned door still bookable: %+v", d)
 	}
-	if err := e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Sideways"); !errors.Is(err, shared.ErrInvalidDockFlow) {
+	if err := e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Sideways", ""); !errors.Is(err, shared.ErrInvalidDockFlow) {
 		t.Fatalf("bad dock flow: %v", err)
 	}
 	// a duplicate CloudEvents id is a no-op
 	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH-CHANGED"))
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s5", "D-NEW", "zone-new", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s5", "D-NEW", "zone-new", "Dock", "Both", ""))
 	if d, _ := e.store.Doors().Door(ctx, "D-NEW"); d == nil || d.Site != "WH3" {
 		t.Fatalf("the duplicate zone event must not apply: %+v", d)
 	}
@@ -44,7 +44,7 @@ func TestFacilityConsumers(t *testing.T) {
 func TestBookingForADoorWhoseZoneHasNotArrivedIsRefused(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
-	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-LATE", "zone-late", "Dock", "Both"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-LATE", "zone-late", "Dock", "Both", ""))
 	if _, err := e.svc.BookAppointment(ctx, inboundCmd("D-LATE", at8, at10)); !errors.Is(err, dockappointment.ErrUnknownDoor) {
 		t.Fatalf("pending door: %v", err)
 	}
@@ -214,87 +214,6 @@ func TestActualDoorWins(t *testing.T) {
 	}
 }
 
-func TestLegacyImporter(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	legacy := usecases.LegacyBooking{AppointmentID: apptN(500), DoorCode: "D-IN", Carrier: "ACME Freight", WindowStart: t0.Add(-48 * time.Hour), WindowEnd: t0.Add(-46 * time.Hour), ASNNumbers: []string{"ASN-UNKNOWN"}}
-	must(t, e.svc.ConsumeLegacyBooked(ctx, e.eventID(), legacy))
-	v, err := e.svc.GetAppointment(ctx, apptN(500))
-	if err != nil || v.Provenance != "legacy-import" || v.State != "BOOKED" || v.SiteID != "WH1" || v.CarrierSCAC != "" {
-		t.Fatalf("imported: %+v, %v", v, err)
-	}
-	if got := e.eventNames(); len(got) != 1 || got[0] != "DockAppointmentBooked" {
-		t.Fatalf("events = %v", got)
-	}
-	// importing the same appointment again is a no-op
-	must(t, e.svc.ConsumeLegacyBooked(ctx, e.eventID(), legacy))
-	if e.metrics.Ignored(usecases.IgnoredAlreadyApplied) != 1 || len(e.store.Published()) != 1 {
-		t.Fatal("a repeat import must change nothing")
-	}
-	must(t, e.svc.ConsumeLegacyCheckedIn(ctx, e.eventID(), apptN(500), t0.Add(-47*time.Hour)))
-	if e.state(apptN(500)) != dockappointment.CheckedIn {
-		t.Fatal("legacy check-in")
-	}
-	must(t, e.svc.ConsumeLegacyCompleted(ctx, e.eventID(), apptN(500), time.Time{}))
-	if v, _ = e.svc.GetAppointment(ctx, apptN(500)); v.State != "COMPLETED" || v.CompletedAt == nil || !v.CompletedAt.Equal(t0) {
-		t.Fatalf("legacy completion falls back to the clock: %+v", v)
-	}
-}
-
-func TestLegacyCancel(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	legacy := usecases.LegacyBooking{AppointmentID: apptN(501), DoorCode: "D-IN", Carrier: "ACME Freight", WindowStart: t0.Add(-48 * time.Hour), WindowEnd: t0.Add(-46 * time.Hour), ASNNumbers: []string{"ASN-X"}}
-	second := legacy
-	must(t, e.svc.ConsumeLegacyBooked(ctx, e.eventID(), second))
-	must(t, e.svc.ConsumeLegacyCancelled(ctx, e.eventID(), apptN(501)))
-	if v, _ := e.svc.GetAppointment(ctx, apptN(501)); v.State != "CANCELLED" || v.CancellationReason != "CARRIER_REQUEST" {
-		t.Fatalf("legacy cancel: %+v", v)
-	}
-}
-
-func TestLegacyCompletionKeepsTheLegacyTime(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	b := usecases.LegacyBooking{AppointmentID: apptN(502), DoorCode: "D-IN", Carrier: "ACME", WindowStart: at8, WindowEnd: at10, ASNNumbers: []string{"ASN-Y"}}
-	must(t, e.svc.ConsumeLegacyBooked(ctx, e.eventID(), b))
-	must(t, e.svc.ConsumeLegacyCompleted(ctx, e.eventID(), apptN(502), at9))
-	if v, _ := e.svc.GetAppointment(ctx, apptN(502)); v.State != "COMPLETED" || v.CompletedAt == nil || !v.CompletedAt.Equal(at9) {
-		t.Fatalf("legacy completion time: %+v", v)
-	}
-}
-
-func TestLegacyImporterEdgeCases(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	unknownDoor := usecases.LegacyBooking{AppointmentID: apptN(600), DoorCode: "D-NOPE", Carrier: "ACME", WindowStart: at8, WindowEnd: at10, ASNNumbers: []string{"A"}}
-	must(t, e.svc.ConsumeLegacyBooked(ctx, e.eventID(), unknownDoor))
-	if e.metrics.Ignored(usecases.IgnoredUnknownDoor) != 1 {
-		t.Fatal("an unknown door skips the event and counts it")
-	}
-	bad := unknownDoor
-	bad.DoorCode = "a b"
-	if err := e.svc.ConsumeLegacyBooked(ctx, e.eventID(), bad); !errors.Is(err, shared.ErrInvalidDoorCode) {
-		t.Fatalf("bad door code: %v", err)
-	}
-	bad = unknownDoor
-	bad.DoorCode, bad.AppointmentID = "D-IN", "x"
-	if err := e.svc.ConsumeLegacyBooked(ctx, e.eventID(), bad); !errors.Is(err, dockappointment.ErrInvalidAppointmentID) {
-		t.Fatalf("bad id: %v", err)
-	}
-	// a legacy follow-up on a NATIVE appointment is ignored
-	native := e.book(inboundCmd("D-BOTH", at8, at10))
-	must(t, e.svc.ConsumeLegacyCancelled(ctx, e.eventID(), native))
-	if e.state(native) != dockappointment.Booked || e.metrics.Ignored(usecases.IgnoredNotLegacy) != 1 {
-		t.Fatal("the importer never touches native appointments")
-	}
-	// a legacy follow-up for an unknown appointment is ignored
-	must(t, e.svc.ConsumeLegacyCheckedIn(ctx, e.eventID(), apptN(999), at8))
-	if e.metrics.Ignored(usecases.IgnoredUnknownAppointment) != 1 {
-		t.Fatal("unknown legacy appointment")
-	}
-}
-
 func TestAConsumerTransactionRollsBackItsClaim(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -305,5 +224,43 @@ func TestAConsumerTransactionRollsBackItsClaim(t *testing.T) {
 	}
 	if first, _ := e.store.Claim(ctx, "evt-retry"); !first {
 		t.Fatal("the claim must roll back with the failed effect so a redelivery is processed")
+	}
+}
+
+// The optional GS1 GLN of a Dock slot (ADR 0013): kept with the door, dropped
+// when it is not a valid GLN (never an error), kept across a re-registration
+// that carries none, and gone with the door.
+func TestConsumeSlotRegisteredKeepsAValidGLNAndDropsAnInvalidOne(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	gln := func() shared.GLN {
+		t.Helper()
+		d, _ := e.store.Doors().Door(ctx, "D-NEW")
+		if d == nil {
+			t.Fatal("D-NEW is not a bookable door")
+		}
+		return d.GLN
+	}
+	must(t, e.svc.ConsumeZoneRegistered(ctx, "z1", "zone-new", "WH3"))
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s0", "D-NEW", "zone-new", "Dock", "Both", ""))
+	if gln() != "" {
+		t.Fatalf("a slot without a GLN has none, got %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s1", "D-NEW", "zone-new", "Dock", "Both", "4006381333931"))
+	if gln() != "4006381333931" {
+		t.Fatalf("GLN = %q, want the registered one", gln())
+	}
+	// not a valid GLN (bad check digit): dropped, the known one stays, no error
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s2", "D-NEW", "zone-new", "Dock", "Both", "4006381333932"))
+	if gln() != "4006381333931" {
+		t.Fatalf("an invalid GLN must be ignored, GLN = %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s3", "D-NEW", "zone-new", "Dock", "Inbound", ""))
+	if gln() != "4006381333931" {
+		t.Fatalf("a re-registration without a GLN keeps the known one, got %q", gln())
+	}
+	must(t, e.svc.ConsumeSlotRegistered(ctx, "s4", "D-NEW", "zone-new", "Dock", "Inbound", "4012345000009"))
+	if gln() != "4012345000009" {
+		t.Fatalf("a new valid GLN replaces the old one, got %q", gln())
 	}
 }

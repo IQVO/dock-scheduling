@@ -9,7 +9,7 @@ import (
 )
 
 // InboundReceivingTopic is inbound-receiving's integration topic. The ASN
-// consumer and the legacy importer read it under DIFFERENT groups.
+// consumer reads it.
 const InboundReceivingTopic = "warehouse.inbound-receiving.events"
 
 // The inbound-receiving ASN types the consumer acts on, byte-identical to its

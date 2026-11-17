@@ -44,9 +44,6 @@ func TestLoadConfigNamesEveryMissingVariable(t *testing.T) {
 			t.Errorf("a bare environment must name %s, got %v", name, err)
 		}
 	}
-	if strings.Contains(err.Error(), "DOCK_LEGACY_IMPORT_CONSUMER_GROUP") {
-		t.Errorf("the legacy importer group is optional and must not be named, got %v", err)
-	}
 	if _, err = loadConfig(env(with(groupEnv, map[string]string{"DATABASE_URL": "postgres://x"})), quiet()); err == nil ||
 		!strings.Contains(err.Error(), "KAFKA_BROKERS") || strings.Contains(err.Error(), "DATABASE_URL") || strings.Contains(err.Error(), "CONSUMER_GROUP") {
 		t.Fatalf("only KAFKA_BROKERS is missing, got %v", err)
@@ -88,7 +85,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	want := inboundkafka.Groups{Yard: "g-yard", Facility: "g-facility", Asn: "g-asn", Cpt: "g-cpt"}
 	if cfg.groups != want {
-		t.Fatalf("groups = %+v, want %+v (the legacy importer is off by default)", cfg.groups, want)
+		t.Fatalf("groups = %+v, want %+v", cfg.groups, want)
 	}
 }
 
@@ -96,7 +93,6 @@ func TestLoadConfigOverrides(t *testing.T) {
 	cfg, err := loadConfig(env(with(groupEnv, map[string]string{
 		"DATABASE_URL": "postgres://pooled", "MIGRATIONS_DATABASE_URL": "postgres://direct", "KAFKA_BROKERS": "k:9092", "HTTP_ADDR": "127.0.0.1:9",
 		"SHUTDOWN_DRAIN_DELAY": "0", "OUTBOX_RELAY_INTERVAL": "250ms", "OUTBOX_BATCH_SIZE": "7", "OUTBOX_MAX_ATTEMPTS": "0", "LOG_LEVEL": "debug",
-		"DOCK_LEGACY_IMPORT_CONSUMER_GROUP": "g-legacy",
 	})), quiet())
 	if err != nil {
 		t.Fatal(err)
@@ -107,30 +103,18 @@ func TestLoadConfigOverrides(t *testing.T) {
 	if cfg.drainDelay != 0 || cfg.relayInterval != 250*time.Millisecond || cfg.batchSize != 7 || cfg.maxAttempts != 0 {
 		t.Fatalf("unexpected tuning overrides: %+v", cfg)
 	}
-	if cfg.groups.LegacyImport != "g-legacy" {
-		t.Fatalf("legacy import group = %q, want g-legacy", cfg.groups.LegacyImport)
-	}
 }
 
-func TestBuildConsumersEnablesTheLegacyImporterOnlyWhenItsGroupIsSet(t *testing.T) {
+func TestBuildConsumersBuildsTheFourConsumers(t *testing.T) {
 	svc := usecases.New(usecases.Deps{})
 	cfg := apiConfig{brokerList: []string{"127.0.0.1:1"}, groups: inboundkafka.Groups{Yard: "y", Facility: "f", Asn: "a", Cpt: "c"}}
 	set, err := buildConsumers(cfg, svc, quiet())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(set.names, ","); got != "yard consumer,facility consumer,asn consumer,cutoff consumer" {
-		t.Fatalf("consumers = %q, want the four mandatory ones", got)
-	}
-	closeAll(set)
-	cfg.groups.LegacyImport = "l"
-	set, err = buildConsumers(cfg, svc, quiet())
-	if err != nil {
-		t.Fatal(err)
-	}
 	defer closeAll(set)
-	if len(set.names) != 5 {
-		t.Fatalf("consumers = %v, want five with the legacy importer", set.names)
+	if got := strings.Join(set.names, ","); got != "yard consumer,facility consumer,asn consumer,cutoff consumer" {
+		t.Fatalf("consumers = %q, want the four consumers", got)
 	}
 }
 

@@ -6,25 +6,22 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/claudioed/dock-scheduling/internal/application/usecases"
 )
 
 // The environment variables the consumer groups come from (ADR 0003). A group
-// is never a literal: a missing one is a boot error naming the variable. The
-// legacy importer's group is the one exception: unset means the importer is
-// OFF.
+// is never a literal: a missing one is a boot error naming the variable.
 const (
-	EnvYardGroup         = "YARD_CONSUMER_GROUP"
-	EnvFacilityGroup     = "FACILITY_CONSUMER_GROUP"
-	EnvAsnGroup          = "ASN_CONSUMER_GROUP"
-	EnvCptGroup          = "CPT_CONSUMER_GROUP"
-	EnvLegacyImportGroup = "DOCK_LEGACY_IMPORT_CONSUMER_GROUP"
+	EnvYardGroup     = "YARD_CONSUMER_GROUP"
+	EnvFacilityGroup = "FACILITY_CONSUMER_GROUP"
+	EnvAsnGroup      = "ASN_CONSUMER_GROUP"
+	EnvCptGroup      = "CPT_CONSUMER_GROUP"
 )
 
-// Groups are the consumer group ids of the five consumers.
+// Groups are the consumer group ids of the four consumers.
 type Groups struct {
 	Yard, Facility, Asn, Cpt string
-	// LegacyImport is optional: "" keeps the strangler stage A importer off.
-	LegacyImport string
 }
 
 // GroupsFromEnv reads the groups through getenv (os.Getenv at the composition
@@ -34,7 +31,6 @@ func GroupsFromEnv(getenv func(string) string) (Groups, error) {
 	g := Groups{
 		Yard: strings.TrimSpace(getenv(EnvYardGroup)), Facility: strings.TrimSpace(getenv(EnvFacilityGroup)),
 		Asn: strings.TrimSpace(getenv(EnvAsnGroup)), Cpt: strings.TrimSpace(getenv(EnvCptGroup)),
-		LegacyImport: strings.TrimSpace(getenv(EnvLegacyImportGroup)),
 	}
 	var missing []string
 	for _, f := range []struct{ env, value string }{
@@ -57,11 +53,12 @@ type UseCases interface {
 	FacilityUseCases
 	AsnUseCases
 	CutoffUseCases
-	LegacyUseCases
 }
 
-// Build constructs every consumer the groups enable: yard, facility, asn and
-// cutoff always, the legacy importer only when its group is set. Nothing dials
+// The use case service implements every consumer's port (compile-time proof).
+var _ UseCases = (*usecases.Service)(nil)
+
+// Build constructs the yard, facility, asn and cutoff consumers. Nothing dials
 // until Start.
 func Build(tr Transport, g Groups, uc UseCases) ([]*Consumer, error) {
 	var out []*Consumer
@@ -76,15 +73,12 @@ func Build(tr Transport, g Groups, uc UseCases) ([]*Consumer, error) {
 		func() (*Consumer, error) { return NewFacilityConsumer(tr, g.Facility, uc) },
 		func() (*Consumer, error) { return NewAsnConsumer(tr, g.Asn, uc) },
 		func() (*Consumer, error) { return NewCutoffConsumer(tr, g.Cpt, uc) },
-		func() (*Consumer, error) { return NewLegacyImportConsumer(tr, g.LegacyImport, uc) },
 	} {
 		c, err := build()
 		if err != nil {
 			return fail(err)
 		}
-		if c != nil {
-			out = append(out, c)
-		}
+		out = append(out, c)
 	}
 	return out, nil
 }

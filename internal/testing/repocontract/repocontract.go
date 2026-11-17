@@ -23,6 +23,7 @@ import (
 type Env struct {
 	Appointments ports.AppointmentRepo
 	Calendars    ports.CalendarRepo
+	Carriers     ports.CarrierRepo
 	Doors        ports.DoorView
 	Asns         ports.AsnView
 	Cutoffs      ports.CutoffView
@@ -39,8 +40,9 @@ type Factory func(t *testing.T) Env
 func Run(t *testing.T, f Factory) {
 	t.Helper()
 	for name, fn := range map[string]func(*testing.T, Factory){
-		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "legacy-backstops": runLegacyBackstops, "door-override": runDoorOverride, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
-		"calendar-updates": runCalendarUpdates, "doors": runDoors, "door-updates": runDoorUpdates, "asns": runAsns, "cutoffs": runCutoffs, "claims": runClaims, "idempotency": runIdempotency, "rollback": runRollback,
+		"appointments": runAppointments, "paging": runPaging, "backstops": runBackstops, "door-override": runDoorOverride, "active": runActiveQueries, "ended-and-lock": runEndedAndLock, "active-by-asn": runActiveByAsnAndDoor, "calendars": runCalendars,
+		"calendar-updates": runCalendarUpdates, "doors": runDoors, "door-updates": runDoorUpdates, "door-gln": runDoorGLN, "asns": runAsns, "cutoffs": runCutoffs, "claims": runClaims, "idempotency": runIdempotency, "rollback": runRollback,
+		"carriers": runCarriers, "carrier-suspension": runCarrierSuspension, "carrier-reinstatement": runCarrierReinstatement, "carrier-paging": runCarrierPaging, "carrier-rollback": runCarrierRollback,
 	} {
 		t.Run(name, func(t *testing.T) { fn(t, f) })
 	}

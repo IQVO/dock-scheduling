@@ -50,7 +50,7 @@ func registerSetupSteps(sc *godog.ScenarioContext, w *world) {
 		if err != nil {
 			return err
 		}
-		return w.store.Doors().UpsertDoor(w.ctx, door, zone, f)
+		return w.store.Doors().UpsertDoor(w.ctx, door, zone, f, "")
 	})
 
 	sc.Step(`^ASN (\S+) is registered$`, func(number string) error {

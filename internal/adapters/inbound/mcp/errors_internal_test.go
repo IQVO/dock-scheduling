@@ -9,6 +9,7 @@ import (
 
 	"github.com/claudioed/dock-scheduling/internal/application/ports"
 	"github.com/claudioed/dock-scheduling/internal/application/usecases"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -59,6 +60,17 @@ func TestSlugsFollowTheRestRule(t *testing.T) {
 		"ErrInvalidArgument":          errInvalidArgument,
 		"ErrNotFound":                 ports.ErrNotFound, // REST: appointment-not-found
 		"ErrInvalidListQuery":         usecases.ErrInvalidListQuery,
+		// The carrier registry (ADR 0012): the slug is the REST rule too.
+		"ErrCarrierSuspended":         carrier.ErrCarrierSuspended,
+		"ErrCarrierAlreadyRegistered": carrier.ErrCarrierAlreadyRegistered,
+		"ErrCarrierAlreadySuspended":  carrier.ErrCarrierAlreadySuspended,
+		"ErrCarrierNotSuspended":      carrier.ErrCarrierNotSuspended,
+		"ErrInvalidScac":              carrier.ErrInvalidScac,
+		"ErrInvalidUSDOT":             carrier.ErrInvalidUSDOT,
+		"ErrInvalidMC":                carrier.ErrInvalidMC,
+		"ErrInvalidCarrierName":       carrier.ErrInvalidCarrierName,
+		"ErrInvalidSuspensionReason":  carrier.ErrInvalidSuspensionReason,
+		"ErrCarrierNotFound":          carrier.ErrCarrierNotFound,
 	}
 	special := map[string]string{"ErrNotFound": "appointment-not-found", "ErrInvalidListQuery": "invalid-cursor"}
 	for name, err := range byRule {

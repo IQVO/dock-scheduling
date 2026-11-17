@@ -47,7 +47,7 @@ func buildAdapters(ctx context.Context, cfg apiConfig, metrics *telemetry.Metric
 	return adapters{
 		pool: pool,
 		deps: usecases.Deps{
-			Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool),
+			Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Carriers: postgres.NewCarrierRepo(pool),
 			Doors: postgres.NewDoorStore(pool), Asns: postgres.NewAsnStore(pool), Cutoffs: postgres.NewCutoffStore(pool),
 			Processed: postgres.NewProcessedEventRepo(pool), Events: postgres.NewOutboxPublisher(pool), Metrics: metrics,
 			IDs: system.IDs{}, Clock: system.Clock{}, UoW: postgres.NewUnitOfWork(pool),

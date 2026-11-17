@@ -18,12 +18,16 @@ type Event interface {
 	OccurredAt() time.Time
 }
 
-// Header is embedded in every appointment event.
+// Header is embedded in every appointment event. Flow is the appointment's
+// direction (INBOUND receives, OUTBOUND ships): the standard vocabularies a
+// fact maps to (ADR 0013) depend on it, so every event carries it, not only
+// the two that publish it as `direction`.
 type Header struct {
 	Appointment string
 	Site        string
 	Version     int64
 	At          time.Time
+	Flow        shared.Direction
 }
 
 // AppointmentID returns the appointment the event is about.
@@ -38,7 +42,7 @@ func (h Header) OccurredAt() time.Time { return h.At }
 // SiteID returns the site of the appointment's door.
 func (h Header) SiteID() string { return h.Site }
 
-// BookedEvent is raised by Book and ImportLegacy.
+// BookedEvent is raised by Book.
 type BookedEvent struct {
 	Header
 	Direction        shared.Direction

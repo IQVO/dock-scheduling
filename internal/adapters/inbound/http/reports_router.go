@@ -48,9 +48,7 @@ func NewReportsRouter(rs *ReportsServer) http.Handler {
 	r.Get("/reports/schedule-adherence", base.handleScheduleAdherence)
 	r.Get("/reports/freshness", rs.handleFreshness)
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeProblem(w, r, notFoundResource, "no such path") })
-	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problem{http.StatusMethodNotAllowed, "method-not-allowed", "Method not allowed"}, "the method is not supported on this path")
-	})
+	r.MethodNotAllowed(methodNotAllowedFor(r))
 	return r
 }
 

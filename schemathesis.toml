@@ -1,0 +1,81 @@
+# Schemathesis configuration, loaded from the repo root by scripts/contract-test.sh
+# (and so by the `contract` CI job). Every operation of apis/openapi.yaml is
+# fuzzed; the response-conformance and not_a_server_error checks stay on
+# everywhere. What is relaxed, per operation, is ONLY the two checks that
+# assume the OpenAPI 3.0.3 schema is the whole input contract:
+#
+#   positive_data_acceptance - "schema-valid input must be accepted"
+#   negative_data_rejection  - "schema-invalid input must be rejected"
+#
+# The service enforces rules a schema cannot express (see each group), so
+# Schemathesis generates schema-valid requests the API correctly rejects. Each
+# rule IS tested where named. This file records spec/implementation gaps; it
+# does not edit the spec (spec hygiene is a separate, deliberate change).
+
+# --- positive_data_acceptance off ------------------------------------------
+
+# Window/door/direction/carrier conditionals (from-now-or-later, max length,
+# half-open overlap, existence and state). Tested by TestBookWindowMayStartAtNowButNotBefore,
+# TestBookWindowLimits, TestWindowOverlapsIsHalfOpen
+# (internal/domain/dockappointment/book_test.go),
+# TestRescheduleWindowStartingNowIsAllowed
+# (internal/domain/dockappointment/commands_test.go) and features/*.feature.
+[[operations]]
+include-operation-id-regex = "^(bookAppointment|rescheduleAppointment|cancelAppointment)$"
+checks.positive_data_acceptance.enabled = false
+
+# from < to, at most 14 days, granularity 1..240 minutes: a cross-parameter
+# rule. Tested by internal/domain/dockcalendar/availability_test.go.
+[[operations]]
+include-operation-id = "getDoorAvailability"
+checks.positive_data_acceptance.enabled = false
+
+# Closure ranges must not overlap and must be ordered; operating-hours windows
+# are cross-field; the settings body is cross-field (granularity vs window).
+# Tested by TestScheduleClosureRejects and TestClosuresOfOneDoorDoNotOverlap
+# (internal/domain/dockcalendar/calendar_test.go).
+[[operations]]
+include-operation-id-regex = "^(scheduleDoorClosure|declareOperatingHours|declareCalendarSettings)$"
+checks.positive_data_acceptance.enabled = false
+
+# If-Match must be the current ETag (Schemathesis sends arbitrary strings);
+# SCAC / US DOT / MC formats and carrier-state rules are conditional; the
+# carrier name must be 1..100 non-blank characters without control characters,
+# which `type: string` cannot say. Tested by
+# TestRescheduleHonoursIfMatchAndRechecksTheWindow
+# (internal/adapters/inbound/http/appointments_test.go) and
+# internal/domain/carrier/carrier_test.go.
+[[operations]]
+include-operation-id-regex = "^(registerCarrier|updateCarrier|suspendCarrier|reinstateCarrier)$"
+checks.positive_data_acceptance.enabled = false
+
+# siteId / doorCode / scac path parameters are validated against a charset
+# rule (1..64, no whitespace/control/NUL) a pattern cannot mirror
+# byte-for-byte; the list cursor is an opaque page token no schema can
+# describe. Tested by TestNULScanner
+# (internal/adapters/inbound/http/errors_internal_test.go) and
+# TestListAppointmentsPagesByCursor ("bad cursor",
+# internal/adapters/inbound/mcp/tools_read_test.go).
+[[operations]]
+include-operation-id-regex = "^(listAppointments|listCarriers|getCarrier|getDockCalendar)$"
+checks.positive_data_acceptance.enabled = false
+
+# reportEta: the free-text `source` may not contain NUL; the server answers
+# 400 malformed-request-body. liftDoorClosure / runNoShowSweep: the
+# Idempotency-Key header must be 1..128 printable ASCII characters, which the
+# header schema does not say (the other Idempotency-Key operations are already
+# in the groups above).
+[[operations]]
+include-operation-id-regex = "^(reportEta|liftDoorClosure|runNoShowSweep)$"
+checks.positive_data_acceptance.enabled = false
+
+# --- negative_data_rejection off -------------------------------------------
+
+# Empty / null optional values are deliberately treated as ABSENT (`?to=`,
+# `?status=`, `{"operatingHours": null}`, `{"noShowGraceMinutes": null}`), so
+# a schema-invalid value of exactly that shape is accepted with 200 instead of
+# a 4xx. (The spec declares these as non-nullable / non-empty; tightening the
+# implementation or relaxing the spec is a separate product call.)
+[[operations]]
+include-operation-id-regex = "^(listAppointments|listCarriers|declareOperatingHours|declareCalendarSettings)$"
+checks.negative_data_rejection.enabled = false

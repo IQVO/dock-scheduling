@@ -17,7 +17,7 @@ func TestPostgresSatisfiesTheRepositoryContract(t *testing.T) {
 	repocontract.Run(t, func(t *testing.T) repocontract.Env {
 		pool := pgtest.NewPool(t)
 		return repocontract.Env{
-			Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Doors: postgres.NewDoorStore(pool),
+			Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Carriers: postgres.NewCarrierRepo(pool), Doors: postgres.NewDoorStore(pool),
 			Asns: postgres.NewAsnStore(pool), Cutoffs: postgres.NewCutoffStore(pool), Processed: postgres.NewProcessedEventRepo(pool),
 			Idempotency: postgres.NewIdempotencyStore(pool), Events: postgres.NewOutboxPublisher(pool), UoW: postgres.NewUnitOfWork(pool),
 		}

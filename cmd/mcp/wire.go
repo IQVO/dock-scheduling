@@ -48,7 +48,7 @@ func buildAdapters(ctx context.Context, cfg mcpConfig, metrics *telemetry.Metric
 	uow := postgres.NewUnitOfWork(pool)
 	clock := system.Clock{}
 	service := usecases.New(usecases.Deps{
-		Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool),
+		Appointments: postgres.NewAppointmentRepo(pool), Calendars: postgres.NewCalendarRepo(pool), Carriers: postgres.NewCarrierRepo(pool),
 		Doors: postgres.NewDoorStore(pool), Asns: postgres.NewAsnStore(pool), Cutoffs: postgres.NewCutoffStore(pool),
 		Processed: postgres.NewProcessedEventRepo(pool), Events: postgres.NewOutboxPublisher(pool), Metrics: metrics,
 		IDs: system.IDs{}, Clock: clock, UoW: uow,

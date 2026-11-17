@@ -8,6 +8,7 @@ import (
 var (
 	_ ports.AppointmentRepo  = (*AppointmentRepo)(nil)
 	_ ports.CalendarRepo     = (*CalendarRepo)(nil)
+	_ ports.CarrierRepo      = (*CarrierRepo)(nil)
 	_ ports.DoorView         = (*DoorStore)(nil)
 	_ ports.AsnView          = (*AsnStore)(nil)
 	_ ports.CutoffView       = (*CutoffStore)(nil)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/claudioed/dock-scheduling/internal/application/repository"
+	"github.com/claudioed/dock-scheduling/internal/domain/carrier"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockappointment"
 	"github.com/claudioed/dock-scheduling/internal/domain/dockcalendar"
 	"github.com/claudioed/dock-scheduling/internal/domain/shared"
@@ -66,6 +67,23 @@ type CalendarRepo interface {
 	Save(ctx context.Context, c *dockcalendar.DockCalendar, expectedVersion int64) error
 }
 
+// CarrierRepo persists Carrier aggregates by SCAC (the carrier registry).
+type CarrierRepo interface {
+	// Get returns the carrier, or ErrNotFound when the SCAC is not registered.
+	Get(ctx context.Context, scac carrier.Scac) (*carrier.Carrier, error)
+	// GetForUpdate is Get with a per-SCAC lock held until the unit of work
+	// ends, so two registrations of one SCAC are serialised (a miss is still
+	// ErrNotFound).
+	GetForUpdate(ctx context.Context, scac carrier.Scac) (*carrier.Carrier, error)
+	// Save inserts the carrier when expectedVersion is 0, else updates it
+	// guarded by the version the caller loaded; a stale version is
+	// dockappointment.ErrConcurrentUpdate.
+	Save(ctx context.Context, c *carrier.Carrier, expectedVersion int64) error
+	// ListPage returns at most limit carriers matching the filter ordered by
+	// SCAC, strictly after the SCAC `after` ("" = first page).
+	ListPage(ctx context.Context, f repository.CarrierFilter, after string, limit int) ([]*carrier.Carrier, error)
+}
+
 // DoorView is the local copy of facility-layout's dock doors and zones.
 type DoorView interface {
 	// Door returns the bookable door, or nil when the door is unknown, not a
@@ -73,8 +91,11 @@ type DoorView interface {
 	Door(ctx context.Context, code shared.DoorCode) (*dockappointment.Door, error)
 	// UpsertZone records zoneId -> siteCode.
 	UpsertZone(ctx context.Context, zoneID, siteCode string) error
-	// UpsertDoor records a Dock slot; RemoveDoor deletes a slot of any role.
-	UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow) error
+	// UpsertDoor records a Dock slot with its optional GS1 GLN ("" = none);
+	// a re-registration that carries no GLN keeps the one already known
+	// (facility-layout sets it at registration only, ADR 0013). RemoveDoor
+	// deletes a slot of any role.
+	UpsertDoor(ctx context.Context, code, zoneID string, flow shared.DockFlow, gln string) error
 	// RemoveDoor deletes the door (a re-registration with another role or a decommission).
 	RemoveDoor(ctx context.Context, code string) error
 }
@@ -122,6 +143,8 @@ type EventPublisher interface {
 	PublishAppointmentEvents(ctx context.Context, events ...dockappointment.Event) error
 	// PublishCalendarEvents enqueues the facts a calendar raised.
 	PublishCalendarEvents(ctx context.Context, events ...dockcalendar.Event) error
+	// PublishCarrierEvents enqueues the facts a carrier raised.
+	PublishCarrierEvents(ctx context.Context, events ...carrier.Event) error
 }
 
 // Metrics counts what the policies deliberately ignore.
