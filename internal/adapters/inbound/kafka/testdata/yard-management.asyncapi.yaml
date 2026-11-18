@@ -36,7 +36,18 @@ info:
     charset=UTF-8`. `specversion`, `id`, `source` (`/warehouse/yard-management`), `type`, `subject`, `time`, `datacontenttype`
     (`application/json`) and `dataschema` (`urn:warehouse:yard-management:<events|analytics>:<EventName>:v1`) are all required.
     Type = `com.warehouse.wms.yard-management.<entity>.<EventName>`. `data` is snake_case, times are RFC 3339 UTC, `version`
-    is the aggregate version. A breaking payload change is a new `.v2` type, never a mutation.'
+    is the aggregate version. A breaking payload change is a new `.v2` type, never a mutation.
+
+
+    **Standard semantics (ADR 0018).** Partners read standard vocabularies, not this context''s private enums, so a fact whose meaning
+    a standard states exactly carries, as ADDITIVE optional `data` fields, `x12_status` (the ANSI X12 214 shipment status code),
+    `cbv_biz_step` (the GS1 EPCIS Core Business Vocabulary business step, as its `urn:epcglobal:cbv:bizstep:` URN) and
+    `cbv_disposition` (the CBV disposition, as its `urn:epcglobal:cbv:disp:` URN). The mapping is one table
+    (`internal/domain/standards`, listed in ADR 0018 with the official code names and sources): VisitCheckedIn, VisitCheckedOut and TrailerDeparted
+    (gate in and out), InspectionCompleted and InspectionFailed (inspection and its outcome) and TrailerHeld (for a damaged trailer or a broken
+    seal). Every other fact never carries them. A field is omitted, never null, when it has no honest value, so a payload with none
+    of them is byte-for-byte what it was before and a consumer that does not know them keeps working. The integration and
+    analytics twins carry identical `data`.'
 servers:
   production:
     host: kafka.warehouse-systems.internal:9092
@@ -319,6 +330,8 @@ components:
               requires_temperature_control: false
             arrived_at: '2026-11-05T14:02:11Z'
             version: 1
+            x12_status: I1
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:arriving
       tags:
       - name: yardvisit
     VisitCheckedInAnalytics:
@@ -370,6 +383,8 @@ components:
               requires_temperature_control: false
             arrived_at: '2026-11-05T14:02:11Z'
             version: 1
+            x12_status: I1
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:arriving
       tags:
       - name: yardvisit
     VisitRejected:
@@ -486,6 +501,8 @@ components:
             departed_at: '2026-11-05T15:40:00Z'
             on_site_minutes: 98
             version: 2
+            x12_status: OA
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:departing
       tags:
       - name: yardvisit
     TrailerDocked:
@@ -850,6 +867,8 @@ components:
             version: 8
             seal_state: null
             seal_class: null
+            x12_status: OA
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:departing
       tags:
       - name: trailer
     TrailerDepartedAnalytics:
@@ -892,6 +911,8 @@ components:
             version: 8
             seal_state: null
             seal_class: null
+            x12_status: OA
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:departing
       tags:
       - name: trailer
     TrailerSecured:
@@ -1236,6 +1257,7 @@ components:
             site_id: WH1
             reason: DAMAGED
             version: 4
+            cbv_disposition: urn:epcglobal:cbv:disp:damaged
       tags:
       - name: trailer
     TrailerHoldReleasedAnalytics:
@@ -1525,6 +1547,8 @@ components:
             completed_at: '2026-11-05T14:30:00Z'
             failed_item_codes:
             - fifth-wheel
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:inspecting
+            cbv_disposition: urn:epcglobal:cbv:disp:non_conformant
       tags:
       - name: inspection
     InspectionCompletedAnalytics:
@@ -1570,6 +1594,8 @@ components:
             completed_at: '2026-11-05T14:30:00Z'
             failed_item_codes:
             - fifth-wheel
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:inspecting
+            cbv_disposition: urn:epcglobal:cbv:disp:non_conformant
       tags:
       - name: inspection
     InspectionFailed:
@@ -1614,6 +1640,8 @@ components:
               required: true
             failed_at: '2026-11-05T14:30:00Z'
             hold_placed: true
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:inspecting
+            cbv_disposition: urn:epcglobal:cbv:disp:non_conformant
       tags:
       - name: inspection
     InspectionFailedAnalytics:
@@ -1658,6 +1686,8 @@ components:
               required: true
             failed_at: '2026-11-05T14:30:00Z'
             hold_placed: true
+            cbv_biz_step: urn:epcglobal:cbv:bizstep:inspecting
+            cbv_disposition: urn:epcglobal:cbv:disp:non_conformant
       tags:
       - name: inspection
     YardCheckClosed:
@@ -2501,6 +2531,13 @@ components:
         version:
           type: integer
           minimum: 1
+        x12_status:
+          type: string
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The ANSI X12 214 shipment status code (element 1650, AT7-01) this fact corresponds to: `I1` (In-Gate): the visit passed the gate in.'
+        cbv_biz_step:
+          type: string
+          pattern: '^urn:epcglobal:cbv:bizstep:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 business step, in its URN form: `urn:epcglobal:cbv:bizstep:arriving` (an object arrives at a location; the CBV''s own example is a truckload arriving into a yard).'
     VisitRejectedData:
       type: object
       required:
@@ -2563,6 +2600,13 @@ components:
         version:
           type: integer
           minimum: 2
+        x12_status:
+          type: string
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The ANSI X12 214 shipment status code (element 1650, AT7-01) this fact corresponds to: `OA` (Out-Gate): the visit left the site through the gate.'
+        cbv_biz_step:
+          type: string
+          pattern: '^urn:epcglobal:cbv:bizstep:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 business step, in its URN form: `urn:epcglobal:cbv:bizstep:departing` (an object leaves a location on its way to a destination).'
     TrailerDockedData:
       type: object
       required:
@@ -2830,6 +2874,13 @@ components:
           - H
           - null
           description: Additive, optional. The ISO 17712 class of the seal (I, S or H); null when none was declared.
+        x12_status:
+          type: string
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The ANSI X12 214 shipment status code (element 1650, AT7-01) this fact corresponds to: `OA` (Out-Gate): the trailer left the site through the gate.'
+        cbv_biz_step:
+          type: string
+          pattern: '^urn:epcglobal:cbv:bizstep:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 business step, in its URN form: `urn:epcglobal:cbv:bizstep:departing` (an object leaves a location on its way to a destination).'
     TrailerSecuredData:
       type: object
       required:
@@ -2961,6 +3012,10 @@ components:
         version:
           type: integer
           minimum: 1
+        cbv_disposition:
+          type: string
+          pattern: '^urn:epcglobal:cbv:disp:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 disposition, in its URN form: `urn:epcglobal:cbv:disp:damaged` when `reason` is DAMAGED, `urn:epcglobal:cbv:disp:container_open` when it is SEAL_BROKEN; omitted for the other reasons, which no CBV disposition says.'
     TrailerHoldReleasedData:
       type: object
       required:
@@ -3198,6 +3253,14 @@ components:
           items:
             type: string
           description: Empty for a PASSED inspection.
+        cbv_biz_step:
+          type: string
+          pattern: '^urn:epcglobal:cbv:bizstep:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 business step, in its URN form: `urn:epcglobal:cbv:bizstep:inspecting` (reviewing objects for physical or documentation defects).'
+        cbv_disposition:
+          type: string
+          pattern: '^urn:epcglobal:cbv:disp:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 disposition, in its URN form: `urn:epcglobal:cbv:disp:conformant` when `outcome` is PASSED, `urn:epcglobal:cbv:disp:non_conformant` when it is FAILED.'
     InspectionFailedData:
       type: object
       required:
@@ -3249,6 +3312,14 @@ components:
         hold_placed:
           type: boolean
           description: true when this inspection placed a hold on the trailer; false when the trailer was already held.
+        cbv_biz_step:
+          type: string
+          pattern: '^urn:epcglobal:cbv:bizstep:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 business step, in its URN form: `urn:epcglobal:cbv:bizstep:inspecting` (reviewing objects for physical or documentation defects).'
+        cbv_disposition:
+          type: string
+          pattern: '^urn:epcglobal:cbv:disp:[a-z_]+$'
+          description: 'Additive, optional (ADR 0018), omitted when absent (never null). The GS1 EPCIS Core Business Vocabulary 2.0 disposition, in its URN form: `urn:epcglobal:cbv:disp:non_conformant` (the outcome of a failed inspection).'
     YardCheckClosedData:
       type: object
       required:
