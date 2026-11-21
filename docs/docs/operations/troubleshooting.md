@@ -85,3 +85,4 @@ Errors are `application/problem+json`; the `type` is `https://errors.dock-schedu
 |---|---|---|---|
 | An MCP booking is accepted but events never publish | No relay is running (the MCP binary starts none). | The outbox backlog query above. | Run the api or `cmd/relay`. |
 | Replayed write returns the first answer | The same `idempotencyKey` and arguments. | `replayed: true` in the answer and log `mcp write`. | Use a new key for a new action. |
+| A retried refusal runs again instead of replaying | The refusal's problem type is RETRYABLE (ADR 0014): state it depends on can change. | The ADR 0014 class table of the refusal's slug. | Nothing is wrong: fix the state (or wait) and retry the SAME key; only FINAL/OUTCOME refusals are stored. |

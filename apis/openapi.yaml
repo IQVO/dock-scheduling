@@ -24,7 +24,10 @@ info:
 
     Events are published as CloudEvents on `warehouse.dock-scheduling.events` through a transactional outbox (see
     `apis/asyncapi.yaml`, ADR 0004). Every `POST` is idempotent: send an `Idempotency-Key`; a replay carries
-    `Idempotency-Replayed: true`. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
+    `Idempotency-Replayed: true`. A retried request is answered from the store only when its first answer is final for
+    it: successes and FINAL/OUTCOME refusals replay; a RETRYABLE refusal (`concurrent-update`, `door-double-booked`,
+    `carrier-suspended`, `unknown-asn`, `window-in-past` and the other state-dependent problem types of ADR 0014) is
+    not stored — the key is released and the retry executes again. Lists are keyset-paged (`limit`, `cursor`) and answer `{items, nextCursor}`. Errors are
     RFC 7807 problem documents with `type = https://errors.dock-scheduling.warehouse-systems.dev/<slug>`. There is no
     authentication layer (fleet decision 2026-09-11).
 
@@ -929,8 +932,11 @@ components:
         Caller-generated unique key (a UUID per logical submit; a retry reuses it) that makes a retried request safe.
         Required on every POST; answered with 400 `idempotency-key-required` when absent and 400
         `idempotency-key-invalid` when it is longer than 128 characters or not printable ASCII. A replay with the same key
-        and the same request (method, path and body) returns the stored response with `Idempotency-Replayed: true`; the
-        same key with a different request is a 409 `idempotency-key-reused`.
+        and the same request (method, path and body) returns the stored response with `Idempotency-Replayed: true` when
+        the first answer was final for it (a success, or a FINAL/OUTCOME refusal of ADR 0014); a RETRYABLE refusal
+        (an optimistic-lock conflict, a state or referenced fact that can change, a window in the past) is not stored,
+        the key is released and the retry executes again; the same key with a different request is a 409
+        `idempotency-key-reused`.
       schema:
         type: string
         minLength: 1
