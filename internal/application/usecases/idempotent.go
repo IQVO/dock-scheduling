@@ -53,10 +53,12 @@ type Outcome struct {
 type Failure func(err error) (slug, detail string, ok bool)
 
 // Idempotency gives an agent write the REST Idempotency-Key semantics
-// (adapters/inbound/http/idempotency.go, ADR 0008): the lookup, the work and
-// the store of the answer run in ONE unit of work, so the aggregate, its
-// outbox rows and the key commit or roll back together. Every answer below 5xx
-// is stored, a client error included; the same key with another request is
+// (adapters/inbound/http/idempotency.go, ADR 0008 and ADR 0014): the lookup,
+// the work and the store of the answer run in ONE unit of work, so the
+// aggregate, its outbox rows and the key commit or roll back together. A
+// success and a FINAL refusal are stored; a RETRYABLE refusal (classify
+// reports ok=false for it) and any 5xx are not, and the key is released. The
+// same key with another request is
 // ErrIdempotencyKeyReused; racing calls with one key keep the first writer
 // (the primary key blocks the loser, which re-reads, rolls its work back and
 // replays the winner's answer).

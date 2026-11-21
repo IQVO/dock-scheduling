@@ -20,13 +20,11 @@ type ReplayProblemForTest struct {
 }
 
 // ReplayCatalogueForTest returns every problem type the catalogue maps, with
-// the replay class its entry declares. RED STAGE: the catalogue has no class
-// field yet, so every entry reports none — exactly what the first template
-// test must fail on.
+// the replay class its entry declares.
 func ReplayCatalogueForTest() []ReplayProblemForTest {
 	out := make([]ReplayProblemForTest, 0, len(problemCatalogue))
 	for _, e := range problemCatalogue {
-		out = append(out, ReplayProblemForTest{Slug: e.p.slug, Status: e.p.status, Class: ""})
+		out = append(out, ReplayProblemForTest{Slug: e.p.slug, Status: e.p.status, Class: e.replay.String()})
 	}
 	return out
 }

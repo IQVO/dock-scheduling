@@ -20,11 +20,11 @@ Feature: The REST edge replays, versions and explains
     Then the response is the problem idempotency-key-reused with status 409
     And door D-BOTH has 1 active appointment
 
-  Scenario: A refusal is replayed too and leaves no trace
+  Scenario: A retryable refusal is not stored, so the key runs again
     Given appointment "first" is booked INBOUND on door D-BOTH from 08:00 to 10:00 for ASN-1
     When the INBOUND booking on door D-BOTH from 09:00 to 11:00 for ASN-2 is sent twice with Idempotency-Key "clash-1"
     Then the response is the problem door-double-booked with status 409
-    And the second response replays the first
+    And the second response is a fresh refusal
     And the published events are DockAppointmentBooked
 
   Scenario: The ETag is the version and If-Match guards the change

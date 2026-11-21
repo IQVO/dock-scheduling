@@ -74,17 +74,42 @@ func TestIdempotencyKeyIsRequiredAndValidated(t *testing.T) {
 	wantStatus(t, e.postKeyed(strings.Repeat("k", 128), "/appointments", body), http.StatusCreated)
 }
 
-func TestAClientErrorIsStoredAndReplayedWithoutSideEffects(t *testing.T) {
+func TestARetryableRefusalIsNotStoredSoTheKeyRunsAgain(t *testing.T) {
 	e := newEnv(t)
 	e.book("D-IN", at8, at10, "ASN-1")
 	published := len(e.store.Published())
 	conflict := inboundBody("D-IN", at8, at10, "ASN-2")
 	first := e.postKeyed("k-4", "/appointments", conflict)
 	wantProblem(t, first, 409, "door-double-booked")
-	replay := e.postKeyed("k-4", "/appointments", conflict)
-	wantProblem(t, replay, 409, "door-double-booked")
+	// door-double-booked is RETRYABLE (ADR 0014): the refusal is not stored,
+	// so the same request under the same key executes again.
+	retry := e.postKeyed("k-4", "/appointments", conflict)
+	wantProblem(t, retry, 409, "door-double-booked")
+	if retry.Header().Get("Idempotency-Replayed") != "" {
+		t.Fatal("a RETRYABLE refusal is not stored, so the retry is a fresh answer")
+	}
+	// The released key stands for no request: another body under it is new.
+	other := e.postKeyed("k-4", "/appointments", inboundBody("D-OUT", at8, at10, "ASN-3"))
+	wantProblem(t, other, 422, "door-flow-mismatch")
+	if countAppointments(t, e) != 1 || len(e.store.Published()) != published {
+		t.Fatal("a refused booking leaves no appointment and no event")
+	}
+}
+
+// A FINAL refusal is stored and replayed: the answer cannot change for this
+// request (ADR 0014).
+func TestAFinalRefusalIsStoredAndReplayedWithoutSideEffects(t *testing.T) {
+	e := newEnv(t)
+	e.book("D-IN", at8, at10, "ASN-1")
+	published := len(e.store.Published())
+	// An empty door code never becomes valid: a function of the request.
+	bad := `{"direction":"INBOUND"}`
+	first := e.postKeyed("k-9", "/appointments", bad)
+	wantProblem(t, first, 422, "invalid-door-code")
+	replay := e.postKeyed("k-9", "/appointments", bad)
+	wantProblem(t, replay, 422, "invalid-door-code")
 	if replay.Header().Get("Idempotency-Replayed") != "true" || replay.Body.String() != first.Body.String() {
-		t.Fatalf("a 4xx answer replays too: %q", replay.Header().Get("Idempotency-Replayed"))
+		t.Fatalf("a FINAL 4xx answer replays too: %q", replay.Header().Get("Idempotency-Replayed"))
 	}
 	if countAppointments(t, e) != 1 || len(e.store.Published()) != published {
 		t.Fatal("a refused booking leaves no appointment and no event")

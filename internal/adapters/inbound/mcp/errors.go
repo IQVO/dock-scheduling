@@ -30,52 +30,57 @@ func argError(format string, a ...any) error {
 var errorCatalogue = []struct {
 	target error
 	slug   string
+	// replay is the replay class of the problem type (ADR 0014), the same
+	// as the REST catalogue's for the same slug: a FINAL refusal is stored
+	// under the key and replayed, a RETRYABLE one is answered but never
+	// stored (the key is released and the same call runs again).
+	replay replayClass
 }{
-	{errInvalidArgument, "invalid-argument"},
-	{usecases.ErrIdempotencyKeyRequired, "idempotency-key-required"},
-	{usecases.ErrIdempotencyKeyInvalid, "idempotency-key-invalid"},
-	{usecases.ErrIdempotencyKeyReused, "idempotency-key-reused"},
-	{usecases.ErrInvalidInitiator, "invalid-initiator"},
-	{usecases.ErrInvalidListQuery, "invalid-cursor"},
-	{usecases.ErrInvalidAvailabilityQuery, "invalid-availability-query"},
+	{errInvalidArgument, "invalid-argument", replayFinal},
+	{usecases.ErrIdempotencyKeyRequired, "idempotency-key-required", replayFinal},
+	{usecases.ErrIdempotencyKeyInvalid, "idempotency-key-invalid", replayFinal},
+	{usecases.ErrIdempotencyKeyReused, "idempotency-key-reused", replayFinal},
+	{usecases.ErrInvalidInitiator, "invalid-initiator", replayFinal},
+	{usecases.ErrInvalidListQuery, "invalid-cursor", replayFinal},
+	{usecases.ErrInvalidAvailabilityQuery, "invalid-availability-query", replayFinal},
 
-	{ports.ErrNotFound, "appointment-not-found"},
-	{usecases.ErrDoorNotFound, "door-not-found"},
-	{carrier.ErrCarrierNotFound, "carrier-not-found"},
-	{usecases.ErrPreconditionFailed, "precondition-failed"},
+	{ports.ErrNotFound, "appointment-not-found", replayFinal},
+	{usecases.ErrDoorNotFound, "door-not-found", replayRetryable},
+	{carrier.ErrCarrierNotFound, "carrier-not-found", replayRetryable},
+	{usecases.ErrPreconditionFailed, "precondition-failed", replayFinal},
 
 	// 409 on REST: conflicts and illegal states.
-	{dockappointment.ErrDoorDoubleBooked, "door-double-booked"},
-	{dockcalendar.ErrDoorUnavailable, "door-unavailable"},
-	{dockappointment.ErrAsnAlreadyScheduled, "asn-already-scheduled"},
-	{dockappointment.ErrIllegalTransition, "illegal-transition"},
-	{dockappointment.ErrConcurrentUpdate, "concurrent-update"},
-	{carrier.ErrCarrierSuspended, "carrier-suspended"},
-	{carrier.ErrCarrierAlreadyRegistered, "carrier-already-registered"},
-	{carrier.ErrCarrierAlreadySuspended, "carrier-already-suspended"},
-	{carrier.ErrCarrierNotSuspended, "carrier-not-suspended"},
+	{dockappointment.ErrDoorDoubleBooked, "door-double-booked", replayRetryable},
+	{dockcalendar.ErrDoorUnavailable, "door-unavailable", replayRetryable},
+	{dockappointment.ErrAsnAlreadyScheduled, "asn-already-scheduled", replayRetryable},
+	{dockappointment.ErrIllegalTransition, "illegal-transition", replayFinal},
+	{dockappointment.ErrConcurrentUpdate, "concurrent-update", replayRetryable},
+	{carrier.ErrCarrierSuspended, "carrier-suspended", replayRetryable},
+	{carrier.ErrCarrierAlreadyRegistered, "carrier-already-registered", replayRetryable},
+	{carrier.ErrCarrierAlreadySuspended, "carrier-already-suspended", replayRetryable},
+	{carrier.ErrCarrierNotSuspended, "carrier-not-suspended", replayRetryable},
 
 	// 422 on REST: value-object and reference rules.
-	{shared.ErrInvalidDoorCode, "invalid-door-code"},
-	{shared.ErrInvalidSiteID, "invalid-site-id"},
-	{shared.ErrInvalidCarrier, "invalid-carrier"},
-	{shared.ErrInvalidDirection, "invalid-direction"},
-	{dockappointment.ErrInvalidAppointmentID, "invalid-appointment-id"},
-	{dockappointment.ErrInvalidWindow, "invalid-window"},
-	{dockappointment.ErrWindowInPast, "window-in-past"},
-	{dockappointment.ErrUnknownDoor, "unknown-door"},
-	{dockappointment.ErrDoorFlowMismatch, "door-flow-mismatch"},
-	{dockappointment.ErrUnknownAsn, "unknown-asn"},
-	{dockappointment.ErrMissingOutboundRef, "missing-outbound-ref"},
-	{dockappointment.ErrDuplicateAsn, "duplicate-asn"},
-	{dockappointment.ErrInvalidRefs, "invalid-refs"},
-	{dockappointment.ErrInvalidReason, "invalid-reason"},
-	{dockappointment.ErrInvalidEta, "invalid-eta"},
-	{carrier.ErrInvalidScac, "invalid-scac"},
-	{carrier.ErrInvalidUSDOT, "invalid-usdot"},
-	{carrier.ErrInvalidMC, "invalid-mc"},
-	{carrier.ErrInvalidCarrierName, "invalid-carrier-name"},
-	{carrier.ErrInvalidSuspensionReason, "invalid-suspension-reason"},
+	{shared.ErrInvalidDoorCode, "invalid-door-code", replayFinal},
+	{shared.ErrInvalidSiteID, "invalid-site-id", replayFinal},
+	{shared.ErrInvalidCarrier, "invalid-carrier", replayFinal},
+	{shared.ErrInvalidDirection, "invalid-direction", replayFinal},
+	{dockappointment.ErrInvalidAppointmentID, "invalid-appointment-id", replayFinal},
+	{dockappointment.ErrInvalidWindow, "invalid-window", replayFinal},
+	{dockappointment.ErrWindowInPast, "window-in-past", replayRetryable},
+	{dockappointment.ErrUnknownDoor, "unknown-door", replayRetryable},
+	{dockappointment.ErrDoorFlowMismatch, "door-flow-mismatch", replayRetryable},
+	{dockappointment.ErrUnknownAsn, "unknown-asn", replayRetryable},
+	{dockappointment.ErrMissingOutboundRef, "missing-outbound-ref", replayFinal},
+	{dockappointment.ErrDuplicateAsn, "duplicate-asn", replayFinal},
+	{dockappointment.ErrInvalidRefs, "invalid-refs", replayFinal},
+	{dockappointment.ErrInvalidReason, "invalid-reason", replayFinal},
+	{dockappointment.ErrInvalidEta, "invalid-eta", replayFinal},
+	{carrier.ErrInvalidScac, "invalid-scac", replayFinal},
+	{carrier.ErrInvalidUSDOT, "invalid-usdot", replayFinal},
+	{carrier.ErrInvalidMC, "invalid-mc", replayFinal},
+	{carrier.ErrInvalidCarrierName, "invalid-carrier-name", replayFinal},
+	{carrier.ErrInvalidSuspensionReason, "invalid-suspension-reason", replayFinal},
 }
 
 // slugFor returns the slug of err; ok is false for an untyped error.
@@ -94,12 +99,16 @@ func toolError(slug, detail string) error {
 	return fmt.Errorf("%s: %s", slug, detail)
 }
 
-// classify is the usecases.Failure of the idempotent writes: every typed
-// (client-side) refusal is stored as the answer of the key, like REST stores
-// its 4xx; anything else is never stored.
+// classify is the usecases.Failure of the idempotent writes (ADR 0014): a
+// typed refusal whose replay class is FINAL is stored as the answer of the
+// key and replayed, like REST stores its FINAL 4xx; a RETRYABLE refusal is
+// answered but never stored — ok=false releases the key, exactly as the REST
+// middleware releases it — and anything untyped is never stored either.
 func classify(err error) (slug, detail string, ok bool) {
-	if slug, ok := slugFor(err); ok {
-		return slug, err.Error(), true
+	for _, entry := range errorCatalogue {
+		if errors.Is(err, entry.target) {
+			return entry.slug, err.Error(), entry.replay == replayFinal
+		}
 	}
 	return "", "", false
 }

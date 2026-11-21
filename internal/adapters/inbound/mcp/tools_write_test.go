@@ -104,13 +104,14 @@ func TestClientErrorsAreStoredAndReplayedLikeRest(t *testing.T) {
 	if !strings.HasPrefix(msg, "door-double-booked: ") {
 		t.Fatalf("first message = %q", msg)
 	}
-	// The door frees up, but the key already has its (4xx) answer: replayed verbatim.
+	// The door frees up: door-double-booked is RETRYABLE (ADR 0014), the
+	// refusal was not stored, so the SAME key and arguments book now.
 	h.ok("cancel_appointment", map[string]any{"appointmentId": occupied, "reason": "SITE_REQUEST", "idempotencyKey": "k-cancel"}, &writeResult{})
-	if again := h.fail("book_appointment", bookArgs("k-conflict", nil)); again != msg {
-		t.Fatalf("replayed message = %q, want %q", again, msg)
+	var retried writeResult
+	h.ok("book_appointment", bookArgs("k-conflict", nil), &retried)
+	if retried.Replayed || retried.Appointment.State != "BOOKED" {
+		t.Fatalf("the retry under the released key = %+v, want a fresh BOOKED", retried)
 	}
-	// A new key now books.
-	h.ok("book_appointment", bookArgs("k-retry", nil), &writeResult{})
 }
 
 // A typed refusal is stored under its OWN key only: another key still works.

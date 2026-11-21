@@ -114,9 +114,15 @@ func TestMapErrorNeverEchoesInfrastructureDetail(t *testing.T) {
 	}
 }
 
-func TestClassifyStoresOnlyTypedErrors(t *testing.T) {
-	if slug, detail, ok := classify(dockappointment.ErrWindowInPast); !ok || slug != "window-in-past" || detail != dockappointment.ErrWindowInPast.Error() {
-		t.Fatalf("typed: %q %q %v", slug, detail, ok)
+func TestClassifyStoresFinalReleasesRetryableAndNeverTheUntyped(t *testing.T) {
+	// window-in-past compares against the clock: RETRYABLE, so it is answered
+	// but never stored (ADR 0014) — the same key runs again.
+	if slug, _, ok := classify(dockappointment.ErrWindowInPast); ok || slug != "window-in-past" {
+		t.Fatalf("retryable: %q stored=%v, want slug window-in-past released", slug, ok)
+	}
+	// A FINAL refusal (an invalid value object never becomes valid) is stored.
+	if slug, _, ok := classify(shared.ErrInvalidDoorCode); !ok || slug != "invalid-door-code" {
+		t.Fatalf("final: %q stored=%v, want invalid-door-code stored", slug, ok)
 	}
 	if _, _, ok := classify(errors.New("connection reset")); ok {
 		t.Fatal("an untyped (server-side) error must not be stored as the answer of a key")

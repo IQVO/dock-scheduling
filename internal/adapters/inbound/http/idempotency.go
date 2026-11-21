@@ -39,29 +39,65 @@ func validIdempotencyKey(key string) bool {
 	return true
 }
 
-// errDiscard rolls the middleware's unit of work back without being a failure.
+// errDiscard rolls the middleware's unit of work back without being a
+// failure; a FINAL 4xx takes it, and the answer is stored on its own after
+// the rollback.
 var errDiscard = errors.New("discard the handler's work")
 
+// errReleased also rolls the unit of work back, and nothing is ever stored:
+// a RETRYABLE (or unclassified) refusal or a 5xx. The key is free again, so
+// the same request under it executes anew (ADR 0014).
+var errReleased = errors.New("release the key; the answer is not stored")
+
+// verdict decides what the middleware does with a captured answer: nil
+// commits it with its key row (a 2xx answer, and an OUTCOME refusal whose
+// writes must stay), errDiscard rolls the work back and stores the refusal
+// on its own (a FINAL 4xx), errReleased rolls back and stores nothing (a
+// RETRYABLE or unclassified refusal, any 5xx). It is the one place the class
+// is read; no slug list, no status range beyond 2xx and 5xx.
+func verdict(c *capture) error {
+	switch {
+	case c.code < http.StatusBadRequest:
+		return nil
+	case c.code >= http.StatusInternalServerError:
+		return errReleased
+	}
+	switch c.class {
+	case replayOutcome:
+		return nil
+	case replayFinal:
+		return errDiscard
+	}
+	return errReleased
+}
+
 // idempotency is the fleet Idempotency-Key middleware over the
-// ports.IdempotencyStore. Every answer below 500 is stored (4xx included): the
-// same key and request replays the same answer with Idempotency-Replayed:
-// true; the same key with another method, path or body is 409
-// idempotency-key-reused. A 5xx or a panic is never stored, so the same key
-// can retry the real work.
+// ports.IdempotencyStore. What is remembered under a key is decided by the
+// replay class of the problem the answer carries (ADR 0014): a 2xx and a
+// FINAL or OUTCOME refusal are stored (and replayed with
+// Idempotency-Replayed: true); a RETRYABLE refusal, like a 5xx or a panic,
+// is not stored and the key is released, so the same request under it runs
+// again; the same key with another method, path or body is 409
+// idempotency-key-reused.
 //
 // Two modes. JOINED (every state-changing POST): the handler runs inside ONE
-// unit of work together with the lookup and, for a 2xx answer, the store of
-// the answer, so the aggregate, its outbox rows and the key commit or roll
-// back together (the use cases' own Do joins). A 4xx or 5xx answer rolls the
-// unit back (a failed statement may have aborted the transaction) and a 4xx is
-// stored afterwards on its own. DETACHED (the sweep, naturally idempotent and
-// one transaction per appointment by design): the handler runs with no outer
-// unit of work and the answer is stored after it.
+// unit of work together with the lookup and, for a storable answer, the
+// store of the answer, so the aggregate, its outbox rows and the key commit
+// or roll back together (the use cases' own Do joins). A FINAL 4xx or any
+// 5xx rolls the unit back (a failed statement may have aborted the
+// transaction); the FINAL answer is stored afterwards on its own. An OUTCOME
+// refusal keeps its writes: they commit with the stored answer in the one
+// transaction (no entry uses the class today). DETACHED (the sweep, naturally
+// idempotent and one transaction per appointment by design): the handler runs
+// with no outer unit of work — its own per-appointment commits stay whatever
+// the answer is — and a storable answer is stored after it.
 //
 // Racing requests with the same key all try to store; the store keeps the
 // first writer (a concurrent Save blocks on the primary key until the other
 // transaction ends). The loser sees another answer on its post-save re-read,
-// rolls its work back and replays the winner's.
+// rolls its work back and replays the winner's. When the first request ends
+// RETRYABLE nothing is stored, so a concurrent duplicate finds no answer and
+// runs the handler itself: both execute, exactly as a retry after the fact.
 type idempotency struct {
 	store ports.IdempotencyStore
 	uow   ports.UnitOfWork
@@ -97,7 +133,7 @@ func (m *idempotency) wrap(next http.Handler, detached bool) http.Handler {
 		} else {
 			err = m.uow.Do(r.Context(), func(ctx context.Context) error { return m.joined(ctx, r, key, fp, next, &res) })
 		}
-		if err != nil && !errors.Is(err, errDiscard) {
+		if err != nil && !errors.Is(err, errDiscard) && !errors.Is(err, errReleased) {
 			writeError(w, r, err)
 			return
 		}
@@ -117,13 +153,18 @@ func (m *idempotency) joined(ctx context.Context, r *http.Request, key, fp strin
 	}
 	c := serveCaptured(next, r.WithContext(ctx))
 	res.fresh = c
-	if c.code >= http.StatusBadRequest {
-		return errDiscard
+	if v := verdict(c); v != nil {
+		return v
 	}
+	// A 2xx answer, and an OUTCOME refusal: the handler's writes commit
+	// together with the key row, in this one transaction.
 	return m.keep(ctx, key, fp, c, res)
 }
 
-// detached is one pass with no outer unit of work.
+// detached is one pass with no outer unit of work (the sweep commits one
+// transaction per appointment by design, so its successes stay whatever the
+// answer is; a RETRYABLE refusal is still not stored — the sweep is
+// naturally idempotent, the retry completes the rest, ADR 0014).
 func (m *idempotency) detached(r *http.Request, key, fp string, next http.Handler, res *attempt) error {
 	ctx := r.Context()
 	rec, found, err := m.store.Lookup(ctx, key)
@@ -136,7 +177,7 @@ func (m *idempotency) detached(r *http.Request, key, fp string, next http.Handle
 	}
 	c := serveCaptured(next, r)
 	res.fresh = c
-	if c.code >= http.StatusInternalServerError {
+	if !c.storable() {
 		return nil
 	}
 	return m.keep(ctx, key, fp, c, res)
@@ -164,10 +205,11 @@ func (m *idempotency) keep(ctx context.Context, key, fp string, c *capture, res 
 	return nil
 }
 
-// finish answers from the pass: a stored answer is replayed, a 5xx is flushed
-// as is, a 4xx is stored on its own first, a 2xx was stored with its work.
+// finish answers from the pass: a stored answer is replayed, a 5xx and a
+// RETRYABLE (or unclassified) refusal are flushed as is with the key free,
+// and a FINAL 4xx is stored on its own first (its work was rolled back).
 func (m *idempotency) finish(w http.ResponseWriter, r *http.Request, key, fp string, res *attempt) {
-	if res.stored == nil && !res.kept && res.fresh != nil && res.fresh.code >= http.StatusBadRequest && res.fresh.code < http.StatusInternalServerError {
+	if res.stored == nil && !res.kept && res.fresh != nil && verdict(res.fresh) == errDiscard {
 		m.keep4xx(r.Context(), key, fp, res)
 	}
 	if res.stored != nil {
