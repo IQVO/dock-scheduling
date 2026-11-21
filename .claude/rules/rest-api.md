@@ -35,9 +35,12 @@ Arrival and door release are NOT REST routes: they are yard facts the Kafka cons
   the kebab-case of the `Err` name without the prefix; the adapter's own refusals are 400 (malformed body, unknown or invalid query or
   path parameter, `idempotency-key-*`), 404 (`appointment-not-found`, `door-not-found`, `unknown-closure`, `not-found`), 412
   (`precondition-failed`). An unmapped error is a 500 `internal-error` whose detail never leaks the cause.
-- Idempotency: every POST needs an `Idempotency-Key` (`idempotency.go`). Every answer below 500 is stored (4xx too) and replays with
-  `Idempotency-Replayed: true`; the same key with another method, path or body is 409 `idempotency-key-reused`. State-changing POSTs run in
-  ONE unit of work with the key row; the sweep runs detached. PUTs are idempotent by method.
+- Idempotency: every POST needs an `Idempotency-Key` (`idempotency.go`). What is stored under the key follows the replay class of the
+  problem type on its catalogue entry (ADR 0014): a 2xx and a FINAL or OUTCOME refusal are stored and replay with `Idempotency-Replayed: true`;
+  a RETRYABLE refusal (state that can change: `concurrent-update`, `door-double-booked`, `carrier-suspended`, `unknown-asn`, `window-in-past`, ...)
+  is not stored — the key is released, the same request runs again, and a different body under it is a NEW request. The same key with another
+  method, path or body is 409 `idempotency-key-reused` (when an answer is stored). State-changing POSTs run in ONE unit of work with the key row;
+  the sweep runs detached. PUTs are idempotent by method.
 - `rejectNUL` (`nul.go`) refuses a NUL in the path (404), the query or a body (400) before the key middleware records anything;
   `rejectBadQuery` refuses a query string that does not percent-decode.
 - Pagination: `page/` is the fleet keyset package copied verbatim; `limit` 1..500 (default 100), an undeclared query parameter is 400.

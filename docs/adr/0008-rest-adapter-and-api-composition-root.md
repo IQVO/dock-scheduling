@@ -3,6 +3,8 @@
 Status: Accepted. Implements the inbound side of ADR 0002 (aggregates, invariants, error names), `apis/openapi.yaml` and the
 runtime rules of ADR 0005. Code: `internal/adapters/inbound/http`, `cmd/api`, `internal/adapters/outbound/{system,telemetry}`,
 `internal/config`, `internal/bootretry`. (ADR 0006 is reserved for the analytics read side, ADR 0007 and up for MCP.)
+Amended in part by ADR 0014 (2026-11-21): a stored `4xx` is no longer one rule for every refusal — every problem type has a replay class
+(FINAL, OUTCOME, RETRYABLE) on its catalogue entry and a RETRYABLE refusal is not stored; the rest of this ADR stands.
 
 ## Decisions
 
