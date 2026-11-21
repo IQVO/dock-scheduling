@@ -37,17 +37,17 @@ var (
 	integAt12 = time.Date(2030, 1, 7, 12, 0, 0, 0, time.UTC)
 )
 
-// integIDs mints uuid-shaped ids so a second row never collides.
+// integIDs mints valid appt-<uuid>/clo-<uuid> shaped ids.
 type integIDs struct{ n int }
 
 func (f *integIDs) NewAppointmentID() string {
 	f.n++
-	return fmt.Sprintf("appt-0000000%02d-e89b-12d3-a456-426614174000", f.n)
+	return fmt.Sprintf("appt-%08x-e89b-12d3-a456-426614174000", f.n)
 }
 
 func (f *integIDs) NewClosureID() string {
 	f.n++
-	return fmt.Sprintf("clo-0000000%02d-e89b-12d3-a456-426614174001", f.n)
+	return fmt.Sprintf("clo-%08x-e89b-12d3-a456-426614174001", f.n)
 }
 
 type clockFunc struct{ now func() time.Time }
