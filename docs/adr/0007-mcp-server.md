@@ -7,6 +7,8 @@ transport, complete surface, attributable writes). Shape reference: inbound-rece
 door calendar, so it also takes bookings) and workforce-management (attributed write).
 Amended in part by ADR 0012: five carrier registry tools (`list_carriers`, `get_carrier`, `register_carrier`, `suspend_carrier`,
 `reinstate_carrier`) bring the surface from nine to fourteen tools; the rest of this ADR stands.
+Amended in part by ADR 0014 (2026-11-21): the write tools' idempotency guard stores a FINAL refusal and releases a RETRYABLE one
+(the replay classes of ADR 0014, through the `Failure` hook of `usecases.Idempotency`); the rest of this ADR stands.
 
 ## Decisions
 

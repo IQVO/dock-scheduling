@@ -18,7 +18,7 @@ import (
 // attribution labels that become the event's `initiated_by`. The adapter, not
 // the caller, stamps the surface: via is always mcp.
 type attribution struct {
-	IdempotencyKey string `json:"idempotencyKey" jsonschema:"a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change, the same key with other arguments is refused (idempotency-key-reused)"`
+	IdempotencyKey string `json:"idempotencyKey" jsonschema:"a unique value per logical request, 1..128 printable ASCII characters; retry with the SAME key and arguments to get the stored answer instead of a second change (a retryable refusal is not stored: the same key may run the work again once the state changed), the same key with other arguments is refused (idempotency-key-reused)"`
 	ProposalID     string `json:"proposalId,omitempty" jsonschema:"optional id of the proposal this change executes, recorded for attribution (max 128 characters)"`
 	ApprovedBy     string `json:"approvedBy,omitempty" jsonschema:"optional id of the human who approved the proposal, recorded for attribution (max 128 characters)"`
 	AgentID        string `json:"agentId,omitempty" jsonschema:"optional id of the calling agent, recorded for attribution (max 128 characters)"`

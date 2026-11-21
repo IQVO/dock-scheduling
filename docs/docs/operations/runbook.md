@@ -156,4 +156,4 @@ Nothing in the service calls `POST /no-show-sweeps` on a timer. The chart's Cron
 | Re-arm an excluded outbox row | `UPDATE outbox SET attempts = 0, next_attempt_at = now() WHERE id = <id>;` |
 | Check analytics freshness | `GET /reports/freshness` on `cmd/reports`: `asOf` and `lagSeconds`. |
 | Rebuild the analytical model | Use a new `ANALYTICS_CONSUMER_GROUP` (reads the topic from the start) against an empty analytical database; the projection dedupes on the event id. |
-| Clear idempotency keys | `idempotency_keys` has a `created_at` index for retention; the service has no purge job, so purge by age in SQL if the table grows. |
+| Clear idempotency keys | `idempotency_keys` has a `created_at` index for retention; the service has no purge job, so purge by age in SQL if the table grows. Only 2xx and FINAL/OUTCOME refusals are stored (ADR 0014): RETRYABLE refusals never add rows. |

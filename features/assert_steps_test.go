@@ -23,6 +23,7 @@ func registerResponseAssertions(sc *godog.ScenarioContext, w *world) {
 	sc.Step(`^the problem detail names appointment "([^"]+)"$`, w.wantDetailNames)
 	sc.Step(`^the response carries the header (\S+) (.+)$`, w.wantHeader)
 	sc.Step(`^the second response replays the first$`, w.wantReplay)
+	sc.Step(`^the second response is a fresh refusal$`, w.wantFreshRefusal)
 }
 
 func (w *world) wantStatus(want int) error {
@@ -76,6 +77,19 @@ func (w *world) wantReplay() error {
 	}
 	if w.last.status != w.prev.status || string(w.last.body) != string(w.prev.body) {
 		return fmt.Errorf("the replay differs from the first answer:\n%s\n%s", w.prev.body, w.last.body)
+	}
+	return nil
+}
+
+// wantFreshRefusal: a RETRYABLE refusal is not stored under the key (ADR
+// 0014), so the retry executes again and answers fresh, without the replay
+// header.
+func (w *world) wantFreshRefusal() error {
+	if w.last.header.Get("Idempotency-Replayed") != "" {
+		return fmt.Errorf("the second response is marked Idempotency-Replayed: a retryable refusal is not stored")
+	}
+	if w.last.status != w.prev.status {
+		return fmt.Errorf("the fresh refusal status = %d, want %d", w.last.status, w.prev.status)
 	}
 	return nil
 }
