@@ -185,7 +185,7 @@ func (ix Idempotency) keepFailure(ctx context.Context, key, fp string, res *atte
 		return ix.keep(ctx, ix.record(key, fp, statusStoredFailed, body), res, nil)
 	})
 	if err != nil && !errors.Is(err, errDiscard) {
-		slog.WarnContext(ctx, "idempotency: could not store a client-error answer", "error", err)
+		slog.WarnContext(ctx, "idempotency: could not store a client-error answer", "error", logReplacer.Replace(err.Error()))
 	}
 }
 
