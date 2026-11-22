@@ -88,7 +88,7 @@ func analyticsHandler(kind adherence.Kind, p adherence.Projection, logger *slog.
 			}
 			return fmt.Errorf("project %s %s: %w", kind, e.ID(), err)
 		}
-		logger.DebugContext(ctx, "analytics event projected", "type", e.Type(), "event_id", e.ID(), "subject", e.Subject(), "applied", applied)
+		logger.DebugContext(ctx, "analytics event projected", "type", sanitizeLog(e.Type()), "event_id", sanitizeLog(e.ID()), "subject", sanitizeLog(e.Subject()), "applied", applied)
 		return nil
 	}
 }
