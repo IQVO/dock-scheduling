@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/claudioed/dock-scheduling/internal/application/usecases"
 )
 
 // lhForged is a request-derived value that tries to start a forged log line.
@@ -53,4 +55,24 @@ func TestLogHygiene_McpUnexpectedErrorIsLoggedOnOneLine(t *testing.T) {
 	values := lhRecordLogs(t)
 	_ = mapError(errors.New(lhForged))
 	lhAssertOneLine(t, *values, "an unexpected MCP tool error")
+}
+
+// lhRunIdem runs the work once and answers with its body (a fresh outcome).
+type lhRunIdem struct{}
+
+func (lhRunIdem) Do(ctx context.Context, _, _ string, work func(context.Context) ([]byte, error), _ usecases.Failure) (usecases.Outcome, error) {
+	body, err := work(ctx)
+	return usecases.Outcome{Body: body}, err
+}
+
+// The attribution labels of an agent write are free-form request text; the
+// "mcp write" record must keep them on one line.
+func TestLogHygiene_McpWriteAttributionIsLoggedOnOneLine(t *testing.T) {
+	values := lhRecordLogs(t)
+	att := attribution{IdempotencyKey: "key-1", ProposalID: "p-1" + lhForged, ApprovedBy: "lead" + lhForged, AgentID: "agent" + lhForged}
+	run := func(context.Context) (writeOut, error) { return writeOut{}, nil }
+	if _, err := writeTool[writeOut, *writeOut](context.Background(), Deps{Idempotency: lhRunIdem{}}, "book_appointment", att, struct{}{}, run); err != nil {
+		t.Fatal(err)
+	}
+	lhAssertOneLine(t, *values, "an agent write")
 }
