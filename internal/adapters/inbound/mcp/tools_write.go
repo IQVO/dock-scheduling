@@ -81,8 +81,8 @@ func writeTool[O any, P writeAnswer[O]](ctx context.Context, d Deps, tool string
 	P(&out).markReplayed(outcome.Replayed)
 	trace.SpanFromContext(ctx).SetAttributes(attribute.Bool("idempotency.replayed", outcome.Replayed))
 	fields := append([]any{"tool", tool}, P(&out).logFields()...)
-	slog.InfoContext(ctx, "mcp write", append(fields, "via", string(initiator.Via()), "agent_id", initiator.AgentID(), "proposal_id", initiator.ProposalID(),
-		"approved_by", initiator.ApprovedBy(), "replayed", outcome.Replayed)...)
+	slog.InfoContext(ctx, "mcp write", append(fields, "via", string(initiator.Via()), "agent_id", logReplacer.Replace(initiator.AgentID()),
+		"proposal_id", logReplacer.Replace(initiator.ProposalID()), "approved_by", logReplacer.Replace(initiator.ApprovedBy()), "replayed", outcome.Replayed)...)
 	return out, nil
 }
 

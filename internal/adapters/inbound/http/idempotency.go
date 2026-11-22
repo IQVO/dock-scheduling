@@ -224,7 +224,7 @@ func (m *idempotency) finish(w http.ResponseWriter, r *http.Request, key, fp str
 func (m *idempotency) keep4xx(ctx context.Context, key, fp string, res *attempt) {
 	err := m.uow.Do(ctx, func(ctx context.Context) error { return m.keep(ctx, key, fp, res.fresh, res) })
 	if err != nil && !errors.Is(err, errDiscard) {
-		slog.WarnContext(ctx, "idempotency: could not store a client-error answer", "error", err)
+		slog.WarnContext(ctx, "idempotency: could not store a client-error answer", "error", logReplacer.Replace(err.Error()))
 	}
 }
 

@@ -6,6 +6,7 @@
 package http
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -150,7 +151,7 @@ func recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if p := recover(); p != nil && p != http.ErrAbortHandler {
-				slog.ErrorContext(r.Context(), "handler panicked", "panic", p, "method", logReplacer.Replace(r.Method), "path", logReplacer.Replace(r.URL.Path))
+				slog.ErrorContext(r.Context(), "handler panicked", "panic", logReplacer.Replace(fmt.Sprint(p)), "method", logReplacer.Replace(r.Method), "path", logReplacer.Replace(r.URL.Path))
 				writeProblem(w, r, internalProblem, "an unexpected error occurred")
 			}
 		}()
